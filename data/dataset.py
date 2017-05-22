@@ -42,6 +42,9 @@ class Topic:
                 document_set = [text]
 
         # TODO : calculate tf-idf value
+        # each document_set in document_sets become one element of input of neural network
+        # so length of one input becomes len(document_sets)
+        # calculate average tf-idf value of each document_set
         return []
 
     def print(self):

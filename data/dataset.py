@@ -7,6 +7,7 @@ import numpy
 
 class Topic:
     def __init__(self, file_path):
+        # parsing data
         self.parse_data = []
         with open(file_path) as f:
             for l in f:
@@ -18,15 +19,16 @@ class Topic:
                 except:
                     pass
                 self.parse_data.append((date, text))
+        # sort according to date
         self.parse_data.sort()
 
+    # get feature from the topic : interval - hour
+    # output : array of feature
     def get_feature(self, interval=5):
         documents = []
         document = []
         start_datetime = self.parse_data[0][0]
-        print(start_datetime)
         for date, text in self.parse_data:
-            print(date, text)
             diff = date - start_datetime
             if diff < timedelta(hours=interval):
                 document.append(text)
@@ -36,13 +38,10 @@ class Topic:
                 while date - start_datetime > timedelta(hours=interval):
                     documents.append([])
                     start_datetime = start_datetime + timedelta(hours=interval)
-                    print("cut and ", start_datetime)
                 document = [text]
-        for d in documents:
-            print(d)
 
-
-        pass
+        # TODO : calculate tf-idf value
+        return []
 
     def print(self):
         for t in self.parse_data:
@@ -50,12 +49,12 @@ class Topic:
 
 
 class DataSet:
-    def __init__(self, features, labels, num_examples):
+    def __init__(self, features, labels):
         self._features = features
         self._labels = labels
         self._epochs_completed = 0
         self._index_in_epoch = 0
-        self._num_examples = num_examples
+        self._num_examples = len(features)
 
     def next_batch(self, batch_size):
         """Return the next `batch_size` examples from this data set."""
@@ -84,25 +83,37 @@ def extract_labels(f):
     pass
 
 
-def read_data_sets():
-    topics = []
+# read data from files in directory
+def read_data_sets(train_ratio, interval=5):
+    features = []  # array of features
+    topics = [] # array of topics
+    labels = [] # array of labels
     for dirname, dirnames, filenames in os.walk('.'):
-        # print path to all subdirectories first.
-        # for subdirname in dirnames:
-        #    print(os.path.join(dirname, subdirname))
-
-        # print path to all filenames.
         for filename in filenames:
             file_path = os.path.join(dirname, filename)
+            # only files that contain 'Information' or 'Rumor' in its name
             if "Information" in file_path or "Rumor" in file_path:
                 new_topic = Topic(file_path)
-                #new_topic.print()
                 topics.append(new_topic)
-    topics[0].get_feature()
-    train = DataSet()
-    validation = DataSet()
-    test = DataSet()
+                features.append(new_topic.get_feature(interval=interval))
+                if "Information" in file_path:
+                    labels.append(0)
+                else:
+                    labels.append(1)
+
+    # length of feature and label should be same
+    assert len(features) == len(labels)
+
+    # split train/test set according to ratio
+    train_size = int(train_ratio*len(features))
+    train_features = features[:train_size]
+    train_labels = labels[:train_size]
+    test_features = features[train_size:]
+    test_labels = labels[train_size:]
+    train = DataSet(train_features, train_labels)
+    validation = DataSet([], [])
+    test = DataSet(test_features, test_labels)
     return base.Datasets(train=train, validation=validation, test=test)
 
-read_data_sets()
+read_data_sets(0.8, 5)
 

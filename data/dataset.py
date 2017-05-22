@@ -25,20 +25,21 @@ class Topic:
     # get feature from the topic : interval - hour
     # output : array of feature
     def get_feature(self, interval=5):
-        documents = []
-        document = []
+        # each document_set is time interval
+        document_sets = []
+        document_set = []
         start_datetime = self.parse_data[0][0]
         for date, text in self.parse_data:
             diff = date - start_datetime
             if diff < timedelta(hours=interval):
-                document.append(text)
+                document_set.append(text)
             else:
-                documents.append(document)
+                document_sets.append(document_set)
                 start_datetime = start_datetime + timedelta(hours=interval)
                 while date - start_datetime > timedelta(hours=interval):
-                    documents.append([])
+                    document_sets.append([])
                     start_datetime = start_datetime + timedelta(hours=interval)
-                document = [text]
+                document_set = [text]
 
         # TODO : calculate tf-idf value
         return []

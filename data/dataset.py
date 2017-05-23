@@ -3,22 +3,36 @@ from tensorflow.python.framework import dtypes
 import os
 from datetime import datetime, timedelta
 import numpy
+import json
+import operator
+import re
+
+word_counter = {}
+
+
+def getWords(text):
+    return re.compile('\w+').findall(text)
 
 
 class Topic:
     def __init__(self, file_path):
         # parsing data
         self.parse_data = []
-        with open(file_path) as f:
-            for l in f:
-                # print(l)
-                try:
-                    date = l.split("<d>")[1].split("</d>")[0]
-                    date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
-                    text = l.split("<t>")[1].split("</t>")[0]
-                except:
-                    pass
-                self.parse_data.append((date, text))
+        data_file = open(file_path)
+        for l in data_file:
+            try:
+                j = json.loads(l)
+                text = j['text']
+                self.parse_data.append((datetime.strptime(j['created_at'], "%a %b %d %H:%M:%S +0000 %Y"), text))
+                words = getWords(text)
+                for word in words:
+                    if word in word_counter:
+                        word_counter[word] += 1
+                    else:
+                        word_counter[word] = 1
+            except:
+                pass
+
         # sort according to date
         self.parse_data.sort()
 
@@ -96,17 +110,23 @@ def read_data_sets(train_ratio, interval=5):
         for filename in filenames:
             file_path = os.path.join(dirname, filename)
             # only files that contain 'Information' or 'Rumor' in its name
-            if "Information" in file_path or "Rumor" in file_path:
+            if "nonrumor" in file_path or "rumor" in file_path:
+                print(file_path)
                 new_topic = Topic(file_path)
                 topics.append(new_topic)
                 features.append(new_topic.get_feature(interval=interval))
-                if "Information" in file_path:
+                if "nonrumor" in file_path:
                     labels.append(0)
                 else:
                     labels.append(1)
 
     # length of feature and label should be same
     assert len(features) == len(labels)
+
+    # sort word_counter
+    global word_counter
+
+    word_counter = sorted(word_counter.items(), key=operator.itemgetter(1))[:5000]
 
     # split train/test set according to ratio
     train_size = int(train_ratio*len(features))

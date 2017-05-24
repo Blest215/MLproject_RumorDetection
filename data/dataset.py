@@ -6,6 +6,9 @@ import numpy
 import json
 import operator
 import re
+import math
+import nltk
+from textblob import TextBlob as tb
 
 word_counter = {}
 
@@ -46,14 +49,41 @@ class Topic:
         for date, text in self.parse_data:
             diff = date - start_datetime
             if diff < timedelta(hours=interval):
-                document_set.append(text)
+                document_set.append(tb(text))
             else:
                 document_sets.append(document_set)
                 start_datetime = start_datetime + timedelta(hours=interval)
                 while date - start_datetime > timedelta(hours=interval):
                     document_sets.append([])
                     start_datetime = start_datetime + timedelta(hours=interval)
-                document_set = [text]
+                document_set = [tb(text)]
+
+
+        
+
+        def tf(word, blob):
+            return (float)(blob.words.count(word)) / (float)(len(blob.words))
+
+        def n_containing(word, bloblist):
+             return (float)(sum(1 for blob in bloblist if word in blob.words))
+
+        def idf(word, bloblist):
+            return (float)(math.log(len(bloblist)) / (float)(1 + n_containing(word, bloblist)))
+
+        def tfidf(word, blob, bloblist):
+            return (float)((float)(tf(word, blob)) * (float)(idf(word, bloblist)))
+
+
+        # print document_set
+
+        bloblist = document_set
+
+        for i, blob in enumerate(bloblist):
+            print("Top words in document {}".format(i + 1))
+            scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
+            sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+            for word, score in sorted_words[:]:
+             print("\tWord: {}, TF-IDF: {}".format(word, round(score, 5)))
 
         # TODO : calculate tf-idf value
         # each document_set in document_sets become one element of input of neural network
@@ -61,9 +91,9 @@ class Topic:
         # calculate average tf-idf value of each document_set
         return []
 
-    def print(self):
-        for t in self.parse_data:
-            print(t)
+    # def print(self):
+    #     for t in self.parse_data:
+    #         print(t)
 
 
 class DataSet:

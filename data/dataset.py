@@ -25,7 +25,7 @@ class Topic:
         for l in data_file:
             try:
                 j = json.loads(l)
-                text = j['text']
+                text = j['text'].decode()
                 self.parse_data.append((datetime.strptime(j['created_at'], "%a %b %d %H:%M:%S +0000 %Y"), text))
                 words = getWords(text)
                 for word in words:
@@ -38,6 +38,7 @@ class Topic:
 
         # sort according to date
         self.parse_data.sort()
+
 
     # get feature from the topic : interval - hour
     # output : array of feature
@@ -56,7 +57,7 @@ class Topic:
                 while date - start_datetime > timedelta(hours=interval):
                     document_sets.append([])
                     start_datetime = start_datetime + timedelta(hours=interval)
-                document_set = [tb(text)]
+                    document_set = [tb(text)]
 
 
         
@@ -76,14 +77,17 @@ class Topic:
 
         # print document_set
 
-        bloblist = document_set
+        bloblist=document_set
 
-        for i, blob in enumerate(bloblist):
-            print("Top words in document {}".format(i + 1))
-            scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
-            sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-            for word, score in sorted_words[:]:
-             print("\tWord: {}, TF-IDF: {}".format(word, round(score, 5)))
+        for bloblist in document_sets:
+            for i, blob in enumerate(bloblist):
+                print("Top words in document {}".format(i + 1))
+                scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
+                sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+                for word, score in sorted_words[:]:
+                    print("\tWord: {}, TF-IDF: {}".format(word, round(score, 5)))
+
+
 
         # TODO : calculate tf-idf value
         # each document_set in document_sets become one element of input of neural network

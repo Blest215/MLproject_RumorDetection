@@ -71,36 +71,25 @@ class Topic:
         def tfidf(word, blob, bloblist):
             return float(tf(word, blob) * float(idf(word, bloblist)))
 
+        global word_counter
+        topic_word_tfidf = {}
+        for w in word_counter:
+            topic_word_tfidf[w] = 0.0
 
-        # print document_set
-
-<<<<<<< HEAD
-        bloblist=document_set
-
-=======
->>>>>>> 2cf3fa456c2c615683b635500036c82ecabadba2
         for bloblist in document_sets:
             for i, blob in enumerate(bloblist):
-                print("Top words in document {}".format(i + 1))
                 scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
-                sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-                for word, score in sorted_words[:]:
-                    print("\tWord: {}, TF-IDF: {}".format(word, round(score, 5)))
-<<<<<<< HEAD
+                # sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+                for word in scores:
+                    if word in topic_word_tfidf:
+                        topic_word_tfidf[word] += scores[word]
 
-
-=======
->>>>>>> 2cf3fa456c2c615683b635500036c82ecabadba2
-
-        # TODO : calculate tf-idf value
         # each document_set in document_sets become one element of input of neural network
         # so length of one input becomes len(document_sets)
         # calculate average tf-idf value of each document_set
-        return []
 
-    # def print(self):
-    #     for t in self.parse_data:
-    #         print(t)
+        # extract only tfidf values
+        return topic_word_tfidf.values()
 
 
 class DataSet:
@@ -131,17 +120,10 @@ class DataSet:
         return self._features[start:end], self._labels[start:end]
 
 
-def extract_features(f):
-    pass
-
-def extract_labels(f):
-    pass
-
-
 # read data from files in directory
 def read_data_sets(train_ratio, interval=5):
     features = []  # array of features
-    topics = [] # array of topics
+    topics = {} # array of topics
     labels = [] # array of labels
     for dirname, dirnames, filenames in os.walk('.'):
         for filename in filenames:
@@ -150,20 +132,27 @@ def read_data_sets(train_ratio, interval=5):
             if "nonrumor" in file_path or "rumor" in file_path:
                 print(file_path)
                 new_topic = Topic(file_path)
-                topics.append(new_topic)
-                features.append(new_topic.get_feature(interval=interval))
-                if "nonrumor" in file_path:
-                    labels.append(0)
-                else:
-                    labels.append(1)
-
-    # length of feature and label should be same
-    assert len(features) == len(labels)
+                topics[file_path] = new_topic
 
     # sort word_counter
     global word_counter
 
-    word_counter = sorted(word_counter.items(), key=operator.itemgetter(1))[:5000]
+    # extract top 5000 words
+    word_counter = sorted(word_counter.items(), key=operator.itemgetter(1), reverse=True)[:5000]
+    word_counter = [w[0] for w in word_counter]
+
+    # get feature after count finishes
+    for file_path in topics:
+        print("feature from %s" % file_path)
+        print(numpy.array(features).shape)
+        features.append(topics[file_path].get_feature(interval=interval))
+        if "nonrumor" in file_path:
+            labels.append(0)
+        else:
+            labels.append(1)
+
+    # length of feature and label should be same
+    assert len(features) == len(labels)
 
     # split train/test set according to ratio
     train_size = int(train_ratio*len(features))

@@ -148,3 +148,6 @@ ENV/
 .ropeproject
 
 # End of https://www.gitignore.io/api/pycharm,python
+
+# Ignore dataset
+./Rumor_RNN/

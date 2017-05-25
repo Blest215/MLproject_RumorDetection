@@ -8,9 +8,10 @@ tf.app.flags.DEFINE_string('hello', 'Hello World!', 'Example argument')
 
 flags = tf.app.flags
 flags.DEFINE_integer('K', 5000, 'Number of top-K words')
+FLAGS = flags.FLAGS
 
 
-def placeholder_inputs(batch_size):
+def placeholder_inputs():
     """Generate placeholder variables to represent the input tensors.
     These placeholders are used as inputs by the rest of the model building
     code and will be fed from the downloaded data in the .run() loop, below.
@@ -23,8 +24,9 @@ def placeholder_inputs(batch_size):
     # Note that the shapes of the placeholders match the shapes of the full
     # image and label tensors, except the first dimension is now batch_size
     # rather than the full size of the train or test data sets.
-    inputs_placeholder = tf.placeholder(tf.float32, shape=(batch_size, None, 5000))
-    labels_placeholder = tf.placeholder(tf.int32, shape=(batch_size))
+
+    inputs_placeholder = tf.placeholder(tf.float32, shape=(FLAGS.batch_size, None, 500))
+    labels_placeholder = tf.placeholder(tf.int32, shape=(FLAGS.batch_size))
 
     return inputs_placeholder, labels_placeholder
 

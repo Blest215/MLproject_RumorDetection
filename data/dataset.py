@@ -7,10 +7,10 @@ import json
 import operator
 import re
 import math
-import nltk
 from textblob import TextBlob as tb
 
 word_counter = {}
+tweet_counter = 0
 
 
 def getWords(text):
@@ -33,6 +33,8 @@ class Topic:
                         word_counter[word] += 1
                     else:
                         word_counter[word] = 1
+                global tweet_counter
+                tweet_counter += 1
             except:
                 pass
 
@@ -121,7 +123,7 @@ class DataSet:
 
 
 # read data from files in directory
-def read_data_sets(train_ratio, interval=5):
+def read_data_sets(train_ratio=0.8, validation_ratio=0.1, interval=5):
     features = []  # array of features
     topics = {} # array of topics
     labels = [] # array of labels
@@ -135,11 +137,14 @@ def read_data_sets(train_ratio, interval=5):
                 topics[file_path] = new_topic
 
     # sort word_counter
-    global word_counter
+    global word_counter, tweet_counter
 
     # extract top 5000 words
     word_counter = sorted(word_counter.items(), key=operator.itemgetter(1), reverse=True)[:5000]
     word_counter = [w[0] for w in word_counter]
+
+    # print total number of tweets
+    print("Processed total %s tweets" % tweet_counter)
 
     # get feature after count finishes
     for file_path in topics:
@@ -161,6 +166,9 @@ def read_data_sets(train_ratio, interval=5):
     test_features = features[train_size:]
     test_labels = labels[train_size:]
     train = DataSet(train_features, train_labels)
+
+    validation_size = int(validation_ratio*len(features))
+    validation_features = features[train_size:train_size+validation_size]
     validation = DataSet([], [])
     test = DataSet(test_features, test_labels)
     return base.Datasets(train=train, validation=validation, test=test)

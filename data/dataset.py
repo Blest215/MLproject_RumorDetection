@@ -171,5 +171,4 @@ def read_data_sets(train_ratio, validation_ratio, interval):
     test = DataSet(test_features, test_labels)
     return base.Datasets(train=train, validation=validation, test=test)
 
-read_data_sets(train_ratio=.8, validation_ratio=.1, interval=[5,15])
 

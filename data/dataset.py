@@ -1,5 +1,5 @@
 from tensorflow.contrib.learn.python.learn.datasets import base
-from tensorflow.python.framework import dtypes
+import tensorflow as tf
 import os
 from datetime import datetime, timedelta
 import numpy
@@ -7,11 +7,14 @@ import json
 import operator
 import re
 import math
+import random
 from textblob import TextBlob as tb
 
 word_counter = {}
 tweet_counter = 0
 
+flags = tf.app.flags
+FLAGS = flags.FLAGS
 
 def getWords(text):
     return re.compile('\w+').findall(text)
@@ -37,29 +40,13 @@ class Topic:
                 tweet_counter += 1
             except:
                 pass
-
         # sort according to date
         self.parse_data.sort()
 
-
     # get feature from the topic : interval - hour
     # output : array of feature
-    def get_feature(self, interval=5):
-        # each document_set is time interval
-        document_sets = []
-        document_set = []
-        start_datetime = self.parse_data[0][0]
-        for date, text in self.parse_data:
-            diff = date - start_datetime
-            if diff < timedelta(hours=interval):
-                document_set.append(tb(text))
-            else:
-                document_sets.append(document_set)
-                start_datetime = start_datetime + timedelta(hours=interval)
-                while date - start_datetime > timedelta(hours=interval):
-                    document_sets.append([])
-                    start_datetime = start_datetime + timedelta(hours=interval)
-                    document_set = [tb(text)]
+    def get_feature(self, interval):
+        # each document_set
 
         def tf(word, blob):
             return float(blob.words.count(word)) / float(len(blob.words))
@@ -73,25 +60,35 @@ class Topic:
         def tfidf(word, blob, bloblist):
             return float(tf(word, blob) * float(idf(word, bloblist)))
 
-        global word_counter
-        topic_word_tfidf = {}
-        for w in word_counter:
-            topic_word_tfidf[w] = 0.0
+        def twit_to_tf_dict(text):
+            blob = tb(text)
+            return {word: tf(word, blob) for word in blob.words}
 
-        for bloblist in document_sets:
-            for i, blob in enumerate(bloblist):
-                scores = {word: tfidf(word, blob, bloblist) for word in blob.words}
-                # sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-                for word in scores:
-                    if word in topic_word_tfidf:
-                        topic_word_tfidf[word] += scores[word]
+        def normalize(vector):
+            s = sum(vector)
+            return [float(i)/s for i in vector]
 
-        # each document_set in document_sets become one element of input of neural network
-        # so length of one input becomes len(document_sets)
-        # calculate average tf-idf value of each document_set
+        self.tf_data = []
+        for date, text in self.parse_data:
+            self.tf_data.append(twit_to_tf_dict(text))
 
-        # extract only tfidf values
-        return topic_word_tfidf.values()
+        features = []
+        while self.tf_data:
+            global word_counter
+            vector = {}
+            for w in word_counter:
+                vector[w] = 0.0
+            length = random.randint(interval[0], interval[1])
+            for i in range(length):
+                for w in self.tf_data[0]:
+                    if w in vector:
+                        vector[w] += self.tf_data[0][w]
+                self.tf_data.pop(0)
+                if not self.tf_data:
+                    break
+            features.append(numpy.array(normalize(vector.values())))
+        features = numpy.array(features)
+        return features
 
 
 class DataSet:
@@ -123,7 +120,7 @@ class DataSet:
 
 
 # read data from files in directory
-def read_data_sets(train_ratio=0.8, validation_ratio=0.1, interval=5):
+def read_data_sets(train_ratio, validation_ratio, interval):
     features = []  # array of features
     topics = {} # array of topics
     labels = [] # array of labels
@@ -139,8 +136,8 @@ def read_data_sets(train_ratio=0.8, validation_ratio=0.1, interval=5):
     # sort word_counter
     global word_counter, tweet_counter
 
-    # extract top 5000 words
-    word_counter = sorted(word_counter.items(), key=operator.itemgetter(1), reverse=True)[:5000]
+    # extract top FLAGS.K words
+    word_counter = sorted(word_counter.items(), key=operator.itemgetter(1), reverse=True)[:FLAGS.K]
     word_counter = [w[0] for w in word_counter]
 
     # print total number of tweets
@@ -149,7 +146,6 @@ def read_data_sets(train_ratio=0.8, validation_ratio=0.1, interval=5):
     # get feature after count finishes
     for file_path in topics:
         print("feature from %s" % file_path)
-        print(numpy.array(features).shape)
         features.append(topics[file_path].get_feature(interval=interval))
         if "nonrumor" in file_path:
             labels.append(0)
@@ -163,15 +159,17 @@ def read_data_sets(train_ratio=0.8, validation_ratio=0.1, interval=5):
     train_size = int(train_ratio*len(features))
     train_features = features[:train_size]
     train_labels = labels[:train_size]
-    test_features = features[train_size:]
-    test_labels = labels[train_size:]
     train = DataSet(train_features, train_labels)
 
     validation_size = int(validation_ratio*len(features))
     validation_features = features[train_size:train_size+validation_size]
-    validation = DataSet([], [])
+    validation_labels = labels[train_size:train_size+validation_size]
+    validation = DataSet(validation_features, validation_labels)
+
+    test_features = features[train_size+validation_size:]
+    test_labels = labels[train_size+validation_size:]
     test = DataSet(test_features, test_labels)
     return base.Datasets(train=train, validation=validation, test=test)
 
-read_data_sets(0.8, 5)
+read_data_sets(train_ratio=.8, validation_ratio=.1, interval=[5,15])
 

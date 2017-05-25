@@ -6,10 +6,11 @@ from data.dataset import *
 
 tf.app.flags.DEFINE_string('hello', 'Hello World!', 'Example argument')
 
-FLAGS = tf.app.flags.FLAGS
+flags = tf.app.flags
+flags.DEFINE_integer('K', 5000, 'Number of top-K words')
 
 
-def placeholder_inputs(feature_pool, batch_size):
+def placeholder_inputs(batch_size):
     """Generate placeholder variables to represent the input tensors.
     These placeholders are used as inputs by the rest of the model building
     code and will be fed from the downloaded data in the .run() loop, below.
@@ -22,14 +23,14 @@ def placeholder_inputs(feature_pool, batch_size):
     # Note that the shapes of the placeholders match the shapes of the full
     # image and label tensors, except the first dimension is now batch_size
     # rather than the full size of the train or test data sets.
-    placeholders = []
-    for feature in feature_pool:
-        placeholders.append(tf.placeholder(feature.feature_type, shape=(batch_size, feature.shape)))
+    FLAGS = flags.FLAGS
+    inputs_placeholder = tf.placeholder(tf.float32, shape=(batch_size, None, FLAGS.K))
+    labels_placeholder = tf.placeholder(tf.int32, shape=(batch_size))
 
-    return placeholders
+    return inputs_placeholder, labels_placeholder
 
 
-def fill_feed_dict(data_set, features_placeholders, labels_placeholder):
+def fill_feed_dict(data_set, inputs_placeholder, labels_placeholder):
     """Fills the feed_dict for training the given step.
     A feed_dict takes the form of:
     feed_dict = {
@@ -47,10 +48,10 @@ def fill_feed_dict(data_set, features_placeholders, labels_placeholder):
     # `batch size` examples.
 
     features_feed, labels_feed = data_set.next_batch(FLAGS.batch_size)
-    feed_dict = {}
-    for p in features_placeholders:
-        feed_dict[p] = features_feed
-    feed_dict[labels_placeholder] = labels_feed
+    feed_dict = {
+        inputs_placeholder: features_feed,
+        labels_placeholder: labels_feed,
+    }
     return feed_dict
 
 

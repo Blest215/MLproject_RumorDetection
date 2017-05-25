@@ -4,11 +4,6 @@ import tensorflow as tf
 import argparse
 from data.dataset import *
 
-tf.app.flags.DEFINE_string('hello', 'Hello World!', 'Example argument')
-
-flags = tf.app.flags
-flags.DEFINE_integer('K', 5000, 'Number of top-K words')
-
 
 def placeholder_inputs(batch_size):
     """Generate placeholder variables to represent the input tensors.

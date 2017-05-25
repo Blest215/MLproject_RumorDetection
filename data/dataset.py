@@ -88,6 +88,7 @@ class Topic:
                     break
             features.append(numpy.array(normalize(vector.values())))
         features = numpy.array(features)
+        print(features.shape)
         return features
 
 
@@ -98,25 +99,45 @@ class DataSet:
         self._epochs_completed = 0
         self._index_in_epoch = 0
         self._num_examples = len(features)
+        print(self._num_examples)
 
-    def next_batch(self, batch_size):
+    def next_batch(self, batch_size, shuffle=True):
         """Return the next `batch_size` examples from this data set."""
         start = self._index_in_epoch
-        self._index_in_epoch += batch_size
-        if self._index_in_epoch > self._num_examples:
+        # Shuffle for the first epoch
+        if self._epochs_completed == 0 and start == 0 and shuffle:
+            perm0 = numpy.arange(self._num_examples)
+            numpy.random.shuffle(perm0)
+            self._features = [self._features[i] for i in perm0]
+            self._labels = [self._labels[i] for i in perm0]
+        # Go to the next epoch
+        if start + batch_size >= self._num_examples:
             # Finished epoch
             self._epochs_completed += 1
+            # Get the rest examples in this epoch
+            rest_num_examples = self._num_examples - start
+            features_rest_part = self._features[start:self._num_examples]
+            labels_rest_part = self._labels[start:self._num_examples]
             # Shuffle the data
-            perm = numpy.arange(self._num_examples)
-            numpy.random.shuffle(perm)
-            self._features = self._features[perm]
-            self._labels = self._labels[perm]
+            if shuffle:
+                perm = numpy.arange(self._num_examples)
+                numpy.random.shuffle(perm)
+                self._features = [self._features[i] for i in perm]
+                self._labels = [self._labels[i] for i in perm]
             # Start next epoch
             start = 0
-            self._index_in_epoch = batch_size
-            assert batch_size <= self._num_examples
-        end = self._index_in_epoch
-        return self._features[start:end], self._labels[start:end]
+            self._index_in_epoch = batch_size - rest_num_examples
+            end = self._index_in_epoch
+            if end == 0:
+                return numpy.array(features_rest_part), numpy.array(labels_rest_part)
+            features_new_part = self._features[start:end]
+            labels_new_part = self._labels[start:end]
+            return numpy.concatenate((features_rest_part, features_new_part), axis=0), \
+                   numpy.concatenate((labels_rest_part, labels_new_part), axis=0)
+        else:
+            self._index_in_epoch += batch_size
+            end = self._index_in_epoch
+            return self._features[start:end], self._labels[start:end]
 
 
 # read data from files in directory
@@ -124,11 +145,11 @@ def read_data_sets(train_ratio, validation_ratio, interval=(5, 15)):
     features = []  # array of features
     topics = {} # array of topics
     labels = [] # array of labels
-    for dirname, dirnames, filenames in os.walk('.'):
+    for dirname, dirnames, filenames in os.walk('..'):
         for filename in filenames:
             file_path = os.path.join(dirname, filename)
             # only files that contain 'Information' or 'Rumor' in its name
-            if "nonrumor" in file_path or "rumor" in file_path:
+            if "rumor_RNN/nonrumor_10" in file_path or "rumor_RNN/rumor_10" in file_path:
                 print(file_path)
                 new_topic = Topic(file_path)
                 topics[file_path] = new_topic
@@ -152,10 +173,17 @@ def read_data_sets(train_ratio, validation_ratio, interval=(5, 15)):
         else:
             labels.append(1)
 
+    # get longest topic
+    length = numpy.max([f.shape for f in features], axis=0)[0]
+    flags.DEFINE_integer('input_length', length, 'Length of each input topic')
+
+    # 0 padding of short topics
+    features = [numpy.concatenate((f, numpy.zeros((length-f.shape[0], 5000), dtype=numpy.float))) for f in features]
+
     # length of feature and label should be same
     assert len(features) == len(labels)
 
-    # split train/test set according to ratio
+    # split train/validation/test set according to ratio
     train_size = int(train_ratio*len(features))
     train_features = features[:train_size]
     train_labels = labels[:train_size]
@@ -170,6 +198,4 @@ def read_data_sets(train_ratio, validation_ratio, interval=(5, 15)):
     test_labels = labels[train_size+validation_size:]
     test = DataSet(test_features, test_labels)
     return base.Datasets(train=train, validation=validation, test=test)
-
-read_data_sets(train_ratio=.8, validation_ratio=.1)
 

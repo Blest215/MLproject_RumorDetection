@@ -120,7 +120,7 @@ class DataSet:
 
 
 # read data from files in directory
-def read_data_sets(train_ratio, validation_ratio, interval):
+def read_data_sets(train_ratio, validation_ratio, interval=(5, 15)):
     features = []  # array of features
     topics = {} # array of topics
     labels = [] # array of labels
@@ -137,7 +137,7 @@ def read_data_sets(train_ratio, validation_ratio, interval):
     global word_counter, tweet_counter
 
     # extract top FLAGS.K words
-    word_counter = sorted(word_counter.items(), key=operator.itemgetter(1), reverse=True)[:FLAGS.K]
+    word_counter = sorted(word_counter.items(), key=operator.itemgetter(1), reverse=True)[:5000]
     word_counter = [w[0] for w in word_counter]
 
     # print total number of tweets
@@ -171,5 +171,5 @@ def read_data_sets(train_ratio, validation_ratio, interval):
     test = DataSet(test_features, test_labels)
     return base.Datasets(train=train, validation=validation, test=test)
 
-read_data_sets(train_ratio=.8, validation_ratio=.1, interval=[5,15])
+read_data_sets(train_ratio=.8, validation_ratio=.1)
 

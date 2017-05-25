@@ -1,3 +1,6 @@
+import sys
+sys.path.append('../')
+
 from data import read_data_sets
 from data import placeholder_inputs, fill_feed_dict
 import tensorflow as tf
@@ -10,7 +13,7 @@ flags.DEFINE_integer('batch_size', 10, 'Size of batch')
 flags.DEFINE_integer('max_steps', 1000, 'Maximum number of steps')
 
 train, validation, test = read_data_sets(train_ratio=.8, validation_ratio=.1, interval=(5, 15))
-
+print("loaded?")
 input_placeholder, label_placeholder = placeholder_inputs(FLAGS.batch_size)
 sess = tf.Session()
 

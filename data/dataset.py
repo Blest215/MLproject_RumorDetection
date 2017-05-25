@@ -88,7 +88,7 @@ class Topic:
                     break
             features.append(numpy.array(normalize(vector.values())))
         features = numpy.array(features)
-        print(features.shape)
+        # print(features.shape)
         return features
 
 
@@ -149,8 +149,8 @@ def read_data_sets(train_ratio, validation_ratio, interval=(5, 15)):
         for filename in filenames:
             file_path = os.path.join(dirname, filename)
             # only files that contain 'Information' or 'Rumor' in its name
-            if "rumor_RNN/nonrumor_10" in file_path or "rumor_RNN/rumor_10" in file_path:
-                print(file_path)
+            if "Rumor_RNN/nonrumor" in file_path or "Rumor_RNN/rumor" in file_path:
+                # print(file_path)
                 new_topic = Topic(file_path)
                 topics[file_path] = new_topic
 
@@ -165,14 +165,15 @@ def read_data_sets(train_ratio, validation_ratio, interval=(5, 15)):
     print("Processed total %s tweets" % tweet_counter)
 
     # get feature after count finishes
+    print(len(topics))
     for file_path in topics:
-        print("feature from %s" % file_path)
+        # print("feature from %s" % file_path)
         features.append(topics[file_path].get_feature(interval=interval))
         if "nonrumor" in file_path:
             labels.append(0)
         else:
             labels.append(1)
-
+    print("done?")
     # get longest topic
     length = numpy.max([f.shape for f in features], axis=0)[0]
     flags.DEFINE_integer('input_length', length, 'Length of each input topic')

@@ -1,3 +1,6 @@
+from data import read_data_sets
+from data import placeholder_inputs, fill_feed_dict
+
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.rnn as rnn
@@ -144,19 +147,20 @@ def main(_):
             if tf.gfile.Exists(logdir):
                 logger.info('Delete logdir')
                 tf.gfile.DeleteRecursively(logdir)
-            tf.gfile.MakeDirs('logdir')
+            tf.gfile.MakeDirs(logdir)
 
             tf.global_variables_initializer().run()
             logger.info("initialized")
 
             train_writer = tf.summary.FileWriter(logdir, graph=sess.graph)
 
-            for step in xrange(FLAGS.training_epoch): # training_epoch should be changed to num_steps
-                batch = None
-                if not batch:
-                    raise ValueError("There are no batch data")
+            train, validation, test = read_data_sets(train_ratio=.8, validation_ratio=.1, interval=(5, 15))
 
-                feed = batch.feed_next()
+            for step in xrange(FLAGS.training_epoch): # training_epoch should be changed to num_steps
+
+                feed = fill_feed_dict(train, train_inputs, train_labels)
+                feed['keep_prob'] = FLAGS.keep_prob
+
                 _ = sess.run([train_op], feed)
 
                 if step % 50 == 0:
@@ -164,6 +168,7 @@ def main(_):
                     train_writer.add_summary(summary, step)
             
                 if step % 1000 == 0:
+                    feed['keep_prob'] = FLAGS.keep_prob
                     summary = sess.run([test_merged], feed)
                     train_writer.add_summary(summary, step)
     

@@ -16,6 +16,13 @@ tweet_counter = 0
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
+def _int64_feature(value):
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+def _bytes_feature(value):
+  return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+
 def getWords(text):
     return re.compile('\w+').findall(text)
 
@@ -43,9 +50,8 @@ class Topic:
         # sort according to date
         self.parse_data.sort()
 
-    # get feature from the topic : interval - hour
     # output : array of feature
-    def get_feature(self, interval):
+    def get_feature(self):
         # each document_set
 
         def tf(word, blob):
@@ -73,19 +79,14 @@ class Topic:
             self.tf_data.append(twit_to_tf_dict(text))
 
         features = []
-        while self.tf_data:
+        for data in self.tf_data:
             global word_counter
             vector = {}
             for w in word_counter:
                 vector[w] = 0.0
-            length = random.randint(interval[0], interval[1])
-            for i in range(length):
-                for w in self.tf_data[0]:
-                    if w in vector:
-                        vector[w] += self.tf_data[0][w]
-                self.tf_data.pop(0)
-                if not self.tf_data:
-                    break
+            for w in data:
+                if w in vector:
+                    vector[w] += data[w]
             features.append(numpy.array(normalize(vector.values())))
         features = numpy.array(features)
         print(features.shape)
@@ -141,7 +142,7 @@ class DataSet:
 
 
 # read data from files in directory
-def read_data_sets(train_ratio, validation_ratio, interval=(5, 15)):
+def read_data_sets():
     features = []  # array of features
     topics = {} # array of topics
     labels = [] # array of labels
@@ -149,7 +150,7 @@ def read_data_sets(train_ratio, validation_ratio, interval=(5, 15)):
         for filename in filenames:
             file_path = os.path.join(dirname, filename)
             # only files that contain 'Information' or 'Rumor' in its name
-            if "rumor_RNN/nonrumor_10" in file_path or "rumor_RNN/rumor_10" in file_path:
+            if "nonrumor_100" in file_path or "rumor_100" in file_path:
                 print(file_path)
                 new_topic = Topic(file_path)
                 topics[file_path] = new_topic
@@ -160,6 +161,7 @@ def read_data_sets(train_ratio, validation_ratio, interval=(5, 15)):
     # extract top FLAGS.K words
     word_counter = sorted(word_counter.items(), key=operator.itemgetter(1), reverse=True)[:5000]
     word_counter = [w[0] for w in word_counter]
+    print(word_counter)
 
     # print total number of tweets
     print("Processed total %s tweets" % tweet_counter)
@@ -167,7 +169,7 @@ def read_data_sets(train_ratio, validation_ratio, interval=(5, 15)):
     # get feature after count finishes
     for file_path in topics:
         print("feature from %s" % file_path)
-        features.append(topics[file_path].get_feature(interval=interval))
+        features.append(topics[file_path].get_feature())
         if "nonrumor" in file_path:
             labels.append(0)
         else:
@@ -179,23 +181,43 @@ def read_data_sets(train_ratio, validation_ratio, interval=(5, 15)):
 
     # 0 padding of short topics
     features = [numpy.concatenate((f, numpy.zeros((length-f.shape[0], 5000), dtype=numpy.float))) for f in features]
+    print(numpy.array(features).shape)
 
     # length of feature and label should be same
     assert len(features) == len(labels)
 
+    train_ratio = 0.8
+    validation_ratio = 0.1
     # split train/validation/test set according to ratio
     train_size = int(train_ratio*len(features))
     train_features = features[:train_size]
     train_labels = labels[:train_size]
-    train = DataSet(train_features, train_labels)
+    write_tfrecord(train_features, train_labels, "train")
+    # train = DataSet(train_features, train_labels)
 
     validation_size = int(validation_ratio*len(features))
     validation_features = features[train_size:train_size+validation_size]
     validation_labels = labels[train_size:train_size+validation_size]
-    validation = DataSet(validation_features, validation_labels)
+    write_tfrecord(validation_features, validation_labels, "valid")
+    # validation = DataSet(validation_features, validation_labels)
 
     test_features = features[train_size+validation_size:]
     test_labels = labels[train_size+validation_size:]
-    test = DataSet(test_features, test_labels)
-    return base.Datasets(train=train, validation=validation, test=test)
+    write_tfrecord(test_features, test_labels, "test")
+    # test = DataSet(test_features, test_labels)
 
+
+def write_tfrecord(features, labels, name):
+    # generate tf.record
+    writer = tf.python_io.TFRecordWriter("%s.tfrecords" % name)
+    for i in range(len(features)):
+        example = tf.train.Example(features=tf.train.Features(feature={
+            'tweets': _bytes_feature(features[i].tostring()),
+            'length': _int64_feature(len(features[i])),
+            'vector_size': _int64_feature(5000),
+            'bael': _int64_feature(labels[i])
+        }))
+        writer.write(example.SerializeToString())
+    writer.close()
+
+read_data_sets()

@@ -70,9 +70,6 @@ class Topic:
             blob = tb(text)
             return {word: tf(word, blob) for word in blob.words}
 
-        def normalize(vector):
-            s = sum(vector)
-            return [float(i)/s for i in vector]
 
         self.tf_data = []
         for date, text in self.parse_data:
@@ -87,7 +84,7 @@ class Topic:
             for w in data:
                 if w in vector:
                     vector[w] += data[w]
-            features.append(numpy.array(normalize(vector.values())))
+            features.append(numpy.array(vector.values()))
         features = numpy.array(features)
         print(features.shape)
         return features

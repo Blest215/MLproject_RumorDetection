@@ -143,11 +143,12 @@ def read_data_sets():
     features = []  # array of features
     topics = {} # array of topics
     labels = [] # array of labels
+
     for dirname, dirnames, filenames in os.walk('..'):
         for filename in filenames:
             file_path = os.path.join(dirname, filename)
             # only files that contain 'Information' or 'Rumor' in its name
-            if "nonrumor_100" in file_path or "rumor_100" in file_path:
+            if bool(re.search('\w*rumor_\d*.json$', file_path)):
                 print(file_path)
                 new_topic = Topic(file_path)
                 topics[file_path] = new_topic
@@ -172,15 +173,7 @@ def read_data_sets():
         else:
             labels.append(1)
 
-    # get longest topic
-    length = numpy.max([f.shape for f in features], axis=0)[0]
-    flags.DEFINE_integer('input_length', length, 'Length of each input topic')
-
-    # 0 padding of short topics
-    features = [numpy.concatenate((f, numpy.zeros((length-f.shape[0], 5000), dtype=numpy.float))) for f in features]
-    print(numpy.array(features).shape)
-
-    # length of feature and label should be same
+    # get longest and label should be same
     assert len(features) == len(labels)
 
     train_ratio = 0.8
@@ -212,7 +205,7 @@ def write_tfrecord(features, labels, name):
             'tweets': _bytes_feature(features[i].tostring()),
             'length': _int64_feature(len(features[i])),
             'vector_size': _int64_feature(5000),
-            'bael': _int64_feature(labels[i])
+            'label': _int64_feature(labels[i])
         }))
         writer.write(example.SerializeToString())
     writer.close()

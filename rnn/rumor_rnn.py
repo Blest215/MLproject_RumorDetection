@@ -5,7 +5,8 @@ from tensorflow.contrib.slim import xavier_initializer
 import logging
 import os.path
 
-logging.basicConfig(level=logging.DEBUG, format = "%(levelname) -1s %(asctime)s %(module)s:%(lineno)s %(funcName)s %(message)s")
+logging.basicConfig(level=logging.DEBUG,
+        format = "%(levelname) -1s %(asctime)s %(module)s:%(lineno)s %(funcName)s %(message)s")
 logger = logging.getLogger(__name__)
 
 logger.info('tensorflow version : ' + tf.__version__)
@@ -13,13 +14,13 @@ logger.info('tensorflow version : ' + tf.__version__)
 tf.app.flags.DEFINE_integer('num_feature', 5000, 'Number of features')
 tf.app.flags.DEFINE_integer('num_hidden', 128, 'Number of hidden units of RNN cell')
 tf.app.flags.DEFINE_integer('num_layer', 3, 'Number of hidden layers')
-tf.app.flags.DEFINE_integer('batch_size', 32, 'Mini-batch size')
-tf.app.flags.DEFINE_integer('train_epochs', 300, 'Number of training epoch')
+tf.app.flags.DEFINE_integer('batch_size', 8, 'Mini-batch size')
+tf.app.flags.DEFINE_integer('train_epochs', 1, 'Number of training epoch')
 tf.app.flags.DEFINE_float('lr', 0.001, 'Learning rate')
 tf.app.flags.DEFINE_float('keep_prob', 1.0, 'Dropout keep probability')
 tf.app.flags.DEFINE_string('tf_records', '../data', 'TF records file dir path')
 tf.app.flags.DEFINE_string(
-    'checkpoint_dir', '/tmp/rumor_rnn/',
+    'checkpoint_dir', '/tmp/rumor_rnn',
     'The directory where the model was written to or an absolute path to a '
     'checkpoint file.')
 tf.app.flags.DEFINE_boolean('is_train', True, 'Determine train or test')
@@ -45,10 +46,11 @@ def read_and_decode(filename_queue):
 
   tweet = tf.decode_raw(features['tweets'], tf.float32)
   label = tf.cast(features['label'], tf.int32)
-  length = tf.cast(features['length'], tf.int32)
+  length = 2*tf.cast(features['length'], tf.int32)
   tweet = tf.reshape(tweet, [length, 5000])
+  path = features['file_path']
 
-  return tweet, length, label
+  return tweet, length, label, path
 
 
 def inputs(train, batch_size, num_epochs):
@@ -65,19 +67,15 @@ def inputs(train, batch_size, num_epochs):
     filename_queue = tf.train.string_input_producer(
         [filename], num_epochs=num_epochs)
 
-    tweet, length, label = read_and_decode(filename_queue)
+    tweet, length, label, path = read_and_decode(filename_queue)
 
-    logger.info(tweet)
-    logger.info(length)
-    logger.info(label)
-
-    tweets, lengths, labels = tf.train.batch(
-        [tweet, length, label], batch_size=FLAGS.batch_size, num_threads=2,
-        capacity=1000 + 3 * batch_size, dynamic_pad = True)
+    tweets, lengths, labels, paths = tf.train.batch(
+        [tweet, length, label, path], batch_size=FLAGS.batch_size, num_threads=2,
+        capacity= 3 * batch_size, dynamic_pad = True)
         # Ensures a minimum amount of shuffling of examples.
         # min_after_dequeue=1000)
 
-    return tweets, lengths, labels
+    return tweets, lengths, labels, paths
 
 def main(_):
 
@@ -91,41 +89,13 @@ def main(_):
 
     with graph.as_default():
 
-        train_inputs = tf.placeholder(shape=(batch_size, None, num_feature),
-                                      dtype=tf.float32,
-                                      name='train_inputs')
+        train_inputs, train_inputs_length, train_labels, train_paths = inputs('train', batch_size, FLAGS.train_epochs)
 
-        train_inputs_length = tf.placeholder(shape=(batch_size,),
-                                             dtype=tf.int32,
-                                             name='train_inputs_length')
+        logger.info(train_inputs)
 
-        train_labels = tf.placeholder(shape=(batch_size, None),
-                                      dtype=tf.int32,
-                                      name='train_labels')
+        valid_inputs, valid_inputs_length, valid_labels, valid_paths = inputs('valid', 1, 1)
 
-        valid_inputs = tf.placeholder(shape=(None, None, num_feature),
-                                      dtype=tf.float32,
-                                      name='valid_inputs')
-
-        valid_inputs_length = tf.placeholder(shape=(None,),
-                                             dtype=tf.int32,
-                                             name='valid_inputs_length')
-
-        valid_labels = tf.placeholder(shape=(None, None),
-                                      dtype=tf.int32,
-                                      name='valid_labels')
-
-        test_inputs = tf.placeholder(shape=(None, None, num_feature),
-                                     dtype=tf.float32,
-                                     name='test_inputs')
-        
-        test_inputs_length = tf.placeholder(shape=(None,),
-                                            dtype=tf.int32,
-                                            name='test_inputs_length')
-
-        test_labels = tf.placeholder(shape=(None, None),
-                                     dtype=tf.int32,
-                                     name='test_labels')
+        test_inputs, test_inputs_length, test_labels, test_paths = inputs('test', 1, 1)
         
         keep_prob = tf.placeholder(tf.float32)
 
@@ -198,13 +168,11 @@ def main(_):
             if tf.gfile.Exists(logdir):
                 logger.info('Delete logdir')
                 tf.gfile.DeleteRecursively(logdir)
-            tf.gfile.MakeDirs('logdir')
+            tf.gfile.MakeDirs(logdir)
 
+            init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
 
-            train_in, train_len, train_lab = inputs('train', batch_size, FLAGS.train_epochs)
-            valid_in, valid_len, valid_lab = inputs('valid', 100, 1)
-
-            tf.global_variables_initializer().run()
+            sess.run(init_op)
             logger.info("initialized")
 
             train_writer = tf.summary.FileWriter(logdir, graph=sess.graph)
@@ -215,17 +183,13 @@ def main(_):
 
             try:
                 step = 0
-                while not coord.should_stop() and step<5:
-                    train_feed = {train_inputs: train_in.eval(),
-                                  train_inputs_length: train_len.eval(),
-                                  train_labels: train_lab.eval(),
-                                  keep_prob: 0.5}
-                    logger.info(train_feed)
-                    _ = sess.run([train_op], feed_dict=train_feed)
+                while not coord.should_stop():
+                    train_feed = { keep_prob: 1.0}
+                    summary, _, = sess.run([train_merged, train_op], feed_dict=train_feed)
 
-                    # if step % 50 == 0:
-                    #     summary = sess.run([train_merged], feed)
-                    #     train_writer.add_summary(summary, step)
+                    if step % 10 == 0:
+                    #     summary = sess.run([train_merged], {keep_prob:1.0})
+                        train_writer.add_summary(summary, step)
             
                     # if step % 1000 == 0:
                     #     summary = sess.run([test_merged], feed)

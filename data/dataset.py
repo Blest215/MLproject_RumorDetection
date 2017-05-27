@@ -23,7 +23,7 @@ def _float_feature(value):
     return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
 
 def _bytes_feature(value):
-  return tf.train.Feature(bytes_list=tf.train.BytesList(value=value))
+  return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 def _byte_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
@@ -95,10 +95,10 @@ class Topic:
             for w in data:
                 if w in vector:
                     vector[w] += data[w]
-            features.append(numpy.array(list(vector.values())).reshape((1, 5000)))
+            features.append(numpy.array(list(vector.values())))
             counter += 1
 
-        return features, counter, self.label, self.file_path
+        return numpy.array(features), len(features), self.label, self.file_path
 
 # read data from files in directory
 def read_data_sets():
@@ -153,7 +153,7 @@ def write_tfrecord(topics, name):
     for t in topics:
         features, length, label, path = t.get_feature(longest_topic)
         example = tf.train.Example(features=tf.train.Features(feature={
-            'tweets': _bytes_feature([f.tostring() for f in features]),
+            'tweets': _bytes_feature(features.tostring()),
             'length': _int64_feature(length),
             'vector_size': _int64_feature(5000),
             'label': _int64_feature(label),

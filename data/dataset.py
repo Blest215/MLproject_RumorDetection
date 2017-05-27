@@ -97,10 +97,8 @@ class Topic:
                     vector[w] += data[w]
             features.append(numpy.array(list(vector.values())).reshape((1, 5000)))
             counter += 1
-        for i in range(length-counter):
-            features.append(numpy.zeros(5000).reshape(1, 5000))
-        return numpy.concatenate(features), self.label, self.file_path
 
+        return features, counter, self.label, self.file_path
 
 # read data from files in directory
 def read_data_sets():
@@ -148,41 +146,15 @@ def read_data_sets():
     write_tfrecord(train, "train")
     write_tfrecord(validation, "valid")
     write_tfrecord(test, "test")
-    """
-    # get feature after count finishes
-    for topic in topics:
-        print("feature from %s" % topic)
-        features, label, file_path = topics[topic].get_feature(longest_topic)
-    
-    # get longest and label should be same
-    assert len(features) == len(labels)
-
-    # split train/validation/test set according to ratio
-    train_features = features[:train_size]
-    train_labels = labels[:train_size]
-    write_tfrecord(train_features, train_labels, "train")
-    # train = DataSet(train_features, train_labels)
-
-    validation_features = features[train_size:train_size+validation_size]
-    validation_labels = labels[train_size:train_size+validation_size]
-    write_tfrecord(validation_features, validation_labels, "valid")
-    # validation = DataSet(validation_features, validation_labels)
-
-    test_features = features[train_size+validation_size:]
-    test_labels = labels[train_size+validation_size:]
-    write_tfrecord(test_features, test_labels, "test")
-    # test = DataSet(test_features, test_labels)
-    """
-
 
 def write_tfrecord(topics, name):
     # generate tf.record for train, validation, test group
     writer = tf.python_io.TFRecordWriter("%s.tfrecords" % name)
     for t in topics:
-        features, label, path = t.get_feature(longest_topic)
+        features, length, label, path = t.get_feature(longest_topic)
         example = tf.train.Example(features=tf.train.Features(feature={
             'tweets': _bytes_feature([f.tostring() for f in features]),
-            'length': _int64_feature(len(features)),
+            'length': _int64_feature(length),
             'vector_size': _int64_feature(5000),
             'label': _int64_feature(label),
             'file_path': _byte_feature(tf.compat.as_bytes(path))

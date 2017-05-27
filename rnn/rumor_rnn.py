@@ -5,7 +5,7 @@ from tensorflow.contrib.slim import xavier_initializer
 import logging
 import os.path
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG, format = "%(levelname) -1s %(asctime)s %(module)s:%(lineno)s %(funcName)s %(message)s")
 logger = logging.getLogger(__name__)
 
 logger.info('tensorflow version : ' + tf.__version__)
@@ -44,17 +44,14 @@ def read_and_decode(filename_queue):
       })
 
   tweet = tf.decode_raw(features['tweets'], tf.float32)
-  logger.info(tweets)
-  tweet.set_shape([features['length'], features['vector_size']])
-  logger.info(tweets)
-
   label = tf.cast(features['label'], tf.int32)
   length = tf.cast(features['length'], tf.int32)
+  tweet = tf.reshape(tweet, [length, 5000])
 
   return tweet, length, label
 
 
-def inputs(train='train', batch_size, num_epochs):
+def inputs(train, batch_size, num_epochs):
   if not num_epochs: num_epochs = None
 
   if train=='train':
@@ -70,11 +67,15 @@ def inputs(train='train', batch_size, num_epochs):
 
     tweet, length, label = read_and_decode(filename_queue)
 
-    tweets, lengths, labels = tf.train.shuffle_batch(
-        [image, length, label], batch_size=FLAGS.batch_size, num_threads=2,
-        capacity=1000 + 3 * batch_size,
+    logger.info(tweet)
+    logger.info(length)
+    logger.info(label)
+
+    tweets, lengths, labels = tf.train.batch(
+        [tweet, length, label], batch_size=FLAGS.batch_size, num_threads=2,
+        capacity=1000 + 3 * batch_size, dynamic_pad = True)
         # Ensures a minimum amount of shuffling of examples.
-        min_after_dequeue=1000)
+        # min_after_dequeue=1000)
 
     return tweets, lengths, labels
 
@@ -101,7 +102,7 @@ def main(_):
         train_labels = tf.placeholder(shape=(batch_size, None),
                                       dtype=tf.int32,
                                       name='train_labels')
-                                      
+
         valid_inputs = tf.placeholder(shape=(None, None, num_feature),
                                       dtype=tf.float32,
                                       name='valid_inputs')
@@ -199,11 +200,12 @@ def main(_):
                 tf.gfile.DeleteRecursively(logdir)
             tf.gfile.MakeDirs('logdir')
 
-            tf.global_variables_initializer().run()
-            logger.info("initialized")
 
             train_in, train_len, train_lab = inputs('train', batch_size, FLAGS.train_epochs)
-            valid_in, valid_len, valid_lab = inputs('valid', None, None)
+            valid_in, valid_len, valid_lab = inputs('valid', 100, 1)
+
+            tf.global_variables_initializer().run()
+            logger.info("initialized")
 
             train_writer = tf.summary.FileWriter(logdir, graph=sess.graph)
 
@@ -213,20 +215,21 @@ def main(_):
 
             try:
                 step = 0
-                while not coord.should_stop() and step<2:
-                    train_feed = {train_inputs: inputs.eval(),
-                                  train_inputs_length: inputs_length.eval(),
-                                  train_labels: labels.eval(),
+                while not coord.should_stop() and step<5:
+                    train_feed = {train_inputs: train_in.eval(),
+                                  train_inputs_length: train_len.eval(),
+                                  train_labels: train_lab.eval(),
                                   keep_prob: 0.5}
-                    _ = sess.run([train_op], feed_dict=)
+                    logger.info(train_feed)
+                    _ = sess.run([train_op], feed_dict=train_feed)
 
-                    if step % 50 == 0:
-                        summary = sess.run([train_merged], feed)
-                        train_writer.add_summary(summary, step)
+                    # if step % 50 == 0:
+                    #     summary = sess.run([train_merged], feed)
+                    #     train_writer.add_summary(summary, step)
             
-                    if step % 1000 == 0:
-                        summary = sess.run([test_merged], feed)
-                        train_writer.add_summary(summary, step)
+                    # if step % 1000 == 0:
+                    #     summary = sess.run([test_merged], feed)
+                    #     train_writer.add_summary(summary, step)
 
                     step += 1
 

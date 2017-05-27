@@ -17,7 +17,7 @@ tf.app.flags.DEFINE_integer('batch_size', 32, 'Mini-batch size')
 tf.app.flags.DEFINE_integer('train_epochs', 300, 'Number of training epoch')
 tf.app.flags.DEFINE_float('lr', 0.001, 'Learning rate')
 tf.app.flags.DEFINE_float('keep_prob', 1.0, 'Dropout keep probability')
-tf.app.flags.DEFINE_string('tf_records', None, 'TF records file dir path')
+tf.app.flags.DEFINE_string('tf_records', '../data', 'TF records file dir path')
 tf.app.flags.DEFINE_string(
     'checkpoint_dir', '/tmp/rumor_rnn/',
     'The directory where the model was written to or an absolute path to a '
@@ -36,18 +36,22 @@ def read_and_decode(filename_queue):
   features = tf.parse_single_example(
       serialized_example,
       features={
-          'input_raw': tf.FixedLenFeature([], tf.string),
-          'label': tf.FixedLenFeature([], tf.int32),
+          'tweets': tf.FixedLenFeature([], tf.string),
+          'length': tf.FixedLenFeature([], tf.int64),
+          'vector_size': tf.FixedLenFeature([], tf.int64),
+          'label': tf.FixedLenFeature([], tf.int64),
+          'file_path': tf.FixedLenFeature([], tf.string),
       })
 
-  image = tf.decode_raw(features['image_raw'], tf.float32)
-  image.set_shape([mnist.IMAGE_PIXELS])
-
-  image = tf.cast(image, tf.float32) * (1. / 255) - 0.5
+  tweet = tf.decode_raw(features['tweets'], tf.float32)
+  logger.info(tweets)
+  tweet.set_shape([features['length'], features['vector_size']])
+  logger.info(tweets)
 
   label = tf.cast(features['label'], tf.int32)
+  length = tf.cast(features['length'], tf.int32)
 
-  return image, length, label
+  return tweet, length, label
 
 
 def inputs(train='train', batch_size, num_epochs):
@@ -64,15 +68,15 @@ def inputs(train='train', batch_size, num_epochs):
     filename_queue = tf.train.string_input_producer(
         [filename], num_epochs=num_epochs)
 
-    image, length, label = read_and_decode(filename_queue)
+    tweet, length, label = read_and_decode(filename_queue)
 
-    images, lengths, labels = tf.train.shuffle_batch(
+    tweets, lengths, labels = tf.train.shuffle_batch(
         [image, length, label], batch_size=FLAGS.batch_size, num_threads=2,
         capacity=1000 + 3 * batch_size,
         # Ensures a minimum amount of shuffling of examples.
         min_after_dequeue=1000)
 
-    return images, lengths, labels
+    return tweets, lengths, labels
 
 def main(_):
 
@@ -209,7 +213,7 @@ def main(_):
 
             try:
                 step = 0
-                while not coord.should_stop():
+                while not coord.should_stop() and step<2:
                     train_feed = {train_inputs: inputs.eval(),
                                   train_inputs_length: inputs_length.eval(),
                                   train_labels: labels.eval(),
@@ -223,6 +227,8 @@ def main(_):
                     if step % 1000 == 0:
                         summary = sess.run([test_merged], feed)
                         train_writer.add_summary(summary, step)
+
+                    step += 1
 
             except tf.errors.OutOfRangeError:
                 print('Done training for %d epochs, %d steps.' % (FLAGS.train_epochs, step))

@@ -35,26 +35,25 @@ def random_interval(tweet, length, interval=(10,10)):
     min_len, max_len = interval
 
     temp_len = length
-    current_len = 0#tf.constant(0, dtype=tf.int32, shape=[])
+    current_len = 0
     temp_tweet = None
     count = 0
+    intervals = []
     while True:
         interval = np.random.randint(min_len, max_len+1)
         temp_len -= interval
         next_len = current_len + interval
+        count += 1
 
         if next_len >= length:
-            summed = tf.reduce_sum(tweet[current_len:length], axis=0)
-            normed = tf.nn.l2_normalize(summed, dim=0)
-            if count==0:
-                temp_tweet = tf.reshape(normed, shape=[1, FLAGS.num_feature])
-                break
-            else:
-                temp = tf.reshape(normed, shape=[1, FLAGS.num_feature])
-                temp_tweet = tf.concat([temp_tweet, temp, axis=0)
-                break
+            intervals.append([current_len, length])
+            break
+        else:
+            intervals.append([current_len, next_len])
+        current_len += interval
 
-        if count == 0:
+    for begin, end in intervals:
+        if begin == 0:
             summed = tf.reduce_sum(tweet[current_len:next_len], axis=0)
             normed = tf.nn.l2_normalize(summed, dim=0)
             temp_tweet = tf.reshape(normed, shape=[1, FLAGS.num_feature])
@@ -62,10 +61,7 @@ def random_interval(tweet, length, interval=(10,10)):
             summed = tf.reduce_sum(tweet[current_len:next_len], axis=0)
             normed = tf.nn.l2_normalize(summed, dim=0)
             temp = tf.reshape(normed, shape=[1, FLAGS.num_feature])
-            temp_tweet = tf.concat([temp_tweet, temp, axis=0)
-
-        count += 1
-        current_len += interval
+            temp_tweet = tf.concat([temp_tweet, temp], axis=0)
     
     return temp_tweet, count
        

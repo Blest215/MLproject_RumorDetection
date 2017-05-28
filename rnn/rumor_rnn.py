@@ -31,6 +31,44 @@ TRAIN_FILE = 'train.tfrecords'
 VALIDATION_FILE = 'valid.tfrecords'
 TEST_FILE = 'test.tfrecords'
 
+def random_interval(tweet, length, interval=(10,10)):
+    min_len, max_len = interval
+
+    temp_len = length
+    current_len = 0#tf.constant(0, dtype=tf.int32, shape=[])
+    temp_tweet = None
+    count = 0
+    while True:
+        interval = np.random.randint(min_len, max_len+1)
+        temp_len -= interval
+        next_len = current_len + interval
+
+        if next_len >= length:
+            summed = tf.reduce_sum(tweet[current_len:length], axis=0)
+            normed = tf.nn.l2_normalize(summed, dim=0)
+            if count==0:
+                temp_tweet = tf.reshape(normed, shape=[1, FLAGS.num_feature])
+                break
+            else:
+                temp = tf.reshape(normed, shape=[1, FLAGS.num_feature])
+                temp_tweet = tf.concat([temp_tweet, temp, axis=0)
+                break
+
+        if count == 0:
+            summed = tf.reduce_sum(tweet[current_len:next_len], axis=0)
+            normed = tf.nn.l2_normalize(summed, dim=0)
+            temp_tweet = tf.reshape(normed, shape=[1, FLAGS.num_feature])
+        else:
+            summed = tf.reduce_sum(tweet[current_len:next_len], axis=0)
+            normed = tf.nn.l2_normalize(summed, dim=0)
+            temp = tf.reshape(normed, shape=[1, FLAGS.num_feature])
+            temp_tweet = tf.concat([temp_tweet, temp, axis=0)
+
+        count += 1
+        current_len += interval
+    
+    return temp_tweet, count
+       
 def read_and_decode(filename_queue):
   reader = tf.TFRecordReader()
   _, serialized_example = reader.read(filename_queue)
@@ -47,8 +85,10 @@ def read_and_decode(filename_queue):
   tweet = tf.decode_raw(features['tweets'], tf.float32)
   label = tf.cast(features['label'], tf.int32)
   length = 2*tf.cast(features['length'], tf.int32)
-  tweet = tf.reshape(tweet, [length, 5000])
+  tweet = tf.reshape(tweet, [length, FLAGS.num_feature])
   path = features['file_path']
+
+  tweet, length = random_interval(tweet, length, interval=(8,12))
 
   return tweet, length, label, path
 

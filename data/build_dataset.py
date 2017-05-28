@@ -156,8 +156,8 @@ def read_data_sets():
     print('Found %d JSON files inside %s.' %
           (len(matching_files), data_dir))
 
-    # write_tfrecord(train, "train", FLAGS.train_shards)
-    # write_tfrecord(validation, "valid", FLAGS.validation_shards)
+    write_tfrecord(train, "train", FLAGS.train_shards)
+    write_tfrecord(validation, "valid", FLAGS.validation_shards)
     write_tfrecord(test, "test", FLAGS.test_shards)
 
 

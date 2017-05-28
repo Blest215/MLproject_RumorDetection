@@ -1,256 +1,106 @@
+"""Provides data for rumor detection"""
+
 import os
-import sys
-import json
-import operator
-import re
-import math
-import random
-import threading
-
+from six.moves import urllib
 import tensorflow as tf
-import numpy as np
 
-from datetime import datetime, timedelta
-from textblob import TextBlob as tb
+from datasets import dataset_utils
 
-word_counter = {}
-longest_topic = 0
+slim = tf.contrib.slim
 
-tf.app.flags.DEFINE_integer('train_shards', 32,
-                            'Number of shards in training TFRecord files.')
-tf.app.flags.DEFINE_integer('validation_shards', 4,
-                            'Number of shards in validation TFRecord files.')
-tf.app.flags.DEFINE_integer('test_shards', 4,
-                            'Number of shards in test TFRecord files.')
+# TODO(nsilberman): Add tfrecord file type once the script is updated.
+_FILE_PATTERN = '%s-*'
 
-tf.app.flags.DEFINE_integer('num_threads', 4,
-                            'Number of threads to preprocess the images.')
-FLAGS = tf.app.flags.FLAGS
+_SPLITS_TO_SIZES = {
+    'train': 793,
+    'validation': 99,
+    'test': 100
+}
 
+_ITEMS_TO_DESCRIPTIONS = {
+    'image': 'A color image of varying height and width.',
+    'label': 'The label id of the image, integer between 0 and 999',
+    'label_text': 'The text of the label.',
+    'object/bbox': 'A list of bounding boxes.',
+    'object/label': 'A list of labels, one per each object.',
+}
 
-def _int64_feature(value):
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-
-
-def _float_feature(value):
-    return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
+_NUM_CLASSES = 2
 
 
-def _bytes_feature(value):
-  return tf.train.Feature(bytes_list=tf.train.BytesList(value=value))
+def get_split(split_name, dataset_dir, file_pattern=None, reader=None):
+  """Gets a dataset tuple with instructions for reading ImageNet.
 
+  Args:
+    split_name: A train/test split name.
+    dataset_dir: The base directory of the dataset sources.
+    file_pattern: The file pattern to use when matching the dataset sources.
+      It is assumed that the pattern contains a '%s' string so that the split
+      name can be inserted.
+    reader: The TensorFlow reader type.
 
-def _byte_feature(value):
-    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+  Returns:
+    A `Dataset` namedtuple.
 
+  Raises:
+    ValueError: if `split_name` is not a valid train/test split.
+  """
+  if split_name not in _SPLITS_TO_SIZES:
+    raise ValueError('split name %s was not recognized.' % split_name)
 
-def get_words(text):
-    return re.compile('\w+').findall(text)
+  if not file_pattern:
+    file_pattern = _FILE_PATTERN
+  file_pattern = os.path.join(dataset_dir, file_pattern % split_name)
 
+  # Allowing None in the signature so that dataset_factory can use the default.
+  if reader is None:
+    reader = tf.TFRecordReader
 
-class Topic:
-    def __init__(self, file_path, label):
-        # parsing data
-        self.parse_data = []
-        self.file_path = file_path
-        self.label = label
-        data_file = open(file_path)
-        counter = 0
-        global word_counter
-        for l in data_file:
-            try:
-                j = json.loads(l)
-                text = j['text'] #.decode()
-                self.parse_data.append((datetime.strptime(j['created_at'], "%a %b %d %H:%M:%S +0000 %Y"), text))
-                words = get_words(text)
-                for word in words:
-                    if word in word_counter:
-                        word_counter[word] += 1
-                    else:
-                        word_counter[word] = 1
-                counter += 1
-            except:
-                pass
-        # sort according to date
-        global longest_topic
-        if counter > longest_topic:
-            longest_topic = counter
-        self.parse_data.sort()
+  keys_to_features = {
+      'image/encoded': tf.FixedLenFeature(
+          (), tf.string, default_value=''),
+      'image/format': tf.FixedLenFeature(
+          (), tf.string, default_value='jpeg'),
+      'image/class/label': tf.FixedLenFeature(
+          [], dtype=tf.int64, default_value=-1),
+      'image/class/text': tf.FixedLenFeature(
+          [], dtype=tf.string, default_value=''),
+      'image/object/bbox/xmin': tf.VarLenFeature(
+          dtype=tf.float32),
+      'image/object/bbox/ymin': tf.VarLenFeature(
+          dtype=tf.float32),
+      'image/object/bbox/xmax': tf.VarLenFeature(
+          dtype=tf.float32),
+      'image/object/bbox/ymax': tf.VarLenFeature(
+          dtype=tf.float32),
+      'image/object/class/label': tf.VarLenFeature(
+          dtype=tf.int64),
+  }
 
-    # output : array of feature
-    def get_feature(self, length):
-        # each document_set
+  items_to_handlers = {
+      'image': slim.tfexample_decoder.Image('image/encoded', 'image/format'),
+      'label': slim.tfexample_decoder.Tensor('image/class/label'),
+      'label_text': slim.tfexample_decoder.Tensor('image/class/text'),
+      'object/bbox': slim.tfexample_decoder.BoundingBox(
+          ['ymin', 'xmin', 'ymax', 'xmax'], 'image/object/bbox/'),
+      'object/label': slim.tfexample_decoder.Tensor('image/object/class/label'),
+  }
 
-        def tf(word, blob):
-            return float(blob.words.count(word)) / float(len(blob.words))
+  decoder = slim.tfexample_decoder.TFExampleDecoder(
+      keys_to_features, items_to_handlers)
 
-        def n_containing(word, bloblist):
-            return float(sum(1 for blob in bloblist if word in blob.words))
+  labels_to_names = None
+  if dataset_utils.has_labels(dataset_dir):
+    labels_to_names = dataset_utils.read_label_file(dataset_dir)
+  else:
+    labels_to_names = create_readable_names_for_imagenet_labels()
+    dataset_utils.write_label_file(labels_to_names, dataset_dir)
 
-        def idf(word, bloblist):
-            return float(math.log(len(bloblist)) / float(1 + n_containing(word, bloblist)))
-
-        def tfidf(word, blob, bloblist):
-            return float(tf(word, blob) * float(idf(word, bloblist)))
-
-        def twit_to_tf_dict(text):
-            blob = tb(text)
-            return {word: tf(word, blob) for word in blob.words}
-
-        self.tf_data = []
-        for date, text in self.parse_data:
-            self.tf_data.append(twit_to_tf_dict(text))
-
-        features = []
-        counter = 0
-        for data in self.tf_data:
-            global word_counter
-            vector = {}
-            for w in word_counter:
-                vector[w] = 0.0
-            for w in data:
-                if w in vector:
-                    vector[w] += data[w]
-            features.append(np.array(list(vector.values())).reshape((1, 5000)))
-            counter += 1
-
-        return features, counter, self.label, self.file_path
-
-
-def read_data_sets():
-    """read data from files in directory"""
-    topics = []  # array of topics
-    num_topic = 0
-
-    for dirname, dirnames, filenames in os.walk('..'):
-        for filename in filenames:
-            file_path = os.path.join(dirname, filename)
-            # only files that contain 'Information' or 'Rumor' in its name
-            if bool(re.search('\w*rumor_\d*.json$', file_path)):
-                print(file_path)
-                num_topic += 1
-                if "nonrumor" in file_path:
-                    new_topic = Topic(file_path, 0)
-                else:
-                    new_topic = Topic(file_path, 1)
-                topics.append(new_topic)
-
-    # shuffle topics
-    random.shuffle(topics)
-
-    # sort word_counter
-    global word_counter
-
-    # extract top FLAGS.K words
-    word_counter = sorted(word_counter.items(), key=operator.itemgetter(1), reverse=True)[:5000]
-    word_counter = [w[0] for w in word_counter]
-
-    train_ratio = 0.8
-    train_size = int(train_ratio*num_topic)
-    validation_ratio = 0.1
-    validation_size = int(validation_ratio*num_topic)
-
-    train = []
-    validation = []
-    test = []
-    for i in range(train_size):
-        train.append(topics.pop())
-    for i in range(validation_size):
-        validation.append(topics.pop())
-    for t in topics:
-        test.append(t)
-
-    write_tfrecord(train, "train", FLAGS.train_shards)
-    write_tfrecord(validation, "valid", FLAGS.validation_shards)
-    write_tfrecord(test, "test", FLAGS.test_shards)
-
-
-def write_tfrecord(topics, name, num_shards):
-    num_topics = len(topics)
-
-    # Break all topics into batches with a [ranges[i][0], ranges[i][1]].
-    spacing = np.linspace(0, num_topics, FLAGS.num_threads + 1).astype(np.int)
-    ranges = []
-    threads = []
-    for i in range(len(spacing) - 1):
-        ranges.append([spacing[i], spacing[i + 1]])
-
-    # Launch a thread for each batch.
-    print('Launching %d threads for spacings: %s' % (FLAGS.num_threads, ranges))
-    sys.stdout.flush()
-
-    # Create a mechanism for monitoring when all threads are finished.
-    coord = tf.train.Coordinator()
-
-    threads = []
-    for thread_index in range(len(ranges)):
-        args = (thread_index, ranges, name, topics, num_shards)
-        t = threading.Thread(target=batch_write_tfrecord, args=args)
-        t.start()
-        threads.append(t)
-
-    # Wait for all the threads to terminate.
-    coord.join(threads)
-    print('%s: Finished writing all %d topics in data set.' %
-          (datetime.now(), num_topics))
-    sys.stdout.flush()
-
-
-def batch_write_tfrecord(thread_index, ranges, name, topics, num_shards):
-    # Each thread produces N shards where N = int(num_shards / num_threads).
-    # For instance, if num_shards = 128, and the num_threads = 2, then the first
-    # thread would produce shards [0, 64).
-    num_threads = len(ranges)
-    assert not num_shards % num_threads
-    num_shards_per_batch = int(num_shards / num_threads)
-
-    shard_ranges = np.linspace(ranges[thread_index][0],
-                               ranges[thread_index][1],
-                               num_shards_per_batch + 1).astype(int)
-    num_files_in_thread = ranges[thread_index][1] - ranges[thread_index][0]
-
-    counter = 0
-    for s in range(num_shards_per_batch):
-        # Generate a sharded version of the file name, e.g. 'train-00002-of-00010'
-        shard = thread_index * num_shards_per_batch + s
-        output_filename = '%s-%.5d-of-%.5d' % (name, shard, num_shards)
-        output_file = os.path.join(FLAGS.output_directory, output_filename)
-        writer = tf.python_io.TFRecordWriter(output_file)
-
-        shard_counter = 0
-        files_in_shard = np.arange(shard_ranges[s], shard_ranges[s + 1], dtype=int)
-        for i in files_in_shard:
-            topic = topics[i]
-            features, length, label, path = topic.get_feature(longest_topic)
-            example = tf.train.Example(features=tf.train.Features(feature={
-                'tweets': _bytes_feature([f.tostring() for f in features]),
-                'length': _int64_feature(length),
-                'vector_size': _int64_feature(5000),
-                'label': _int64_feature(label),
-                'file_path': _byte_feature(tf.compat.as_bytes(path))
-            }))
-
-            writer.write(example.SerializeToString())
-            shard_counter += 1
-            counter += 1
-
-            if not counter % 1000:
-                print('%s [thread %d]: Processed %d of %d images in thread batch.' %
-                      (datetime.now(), thread_index, counter, num_files_in_thread))
-                sys.stdout.flush()
-
-        writer.close()
-        print('%s [thread %d]: Wrote %d images to %s' %
-              (datetime.now(), thread_index, shard_counter, output_file))
-        sys.stdout.flush()
-        shard_counter = 0
-    print('%s [thread %d]: Wrote %d images to %d shards.' %
-          (datetime.now(), thread_index, counter, num_files_in_thread))
-    sys.stdout.flush()
-
-
-def main(_):
-    read_data_sets()
-
-if __name__ == 'main':
-    tf.app.run()
+  return slim.dataset.Dataset(
+      data_sources=file_pattern,
+      reader=reader,
+      decoder=decoder,
+      num_samples=_SPLITS_TO_SIZES[split_name],
+      items_to_descriptions=_ITEMS_TO_DESCRIPTIONS,
+      num_classes=_NUM_CLASSES,
+      labels_to_names=labels_to_names)

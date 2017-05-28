@@ -128,6 +128,10 @@ def read_data_sets():
     word_counter = sorted(word_counter.items(), key=operator.itemgetter(1), reverse=True)[:5000]
     word_counter = [w[0] for w in word_counter]
 
+    with open('words.txt', 'w') as f:
+        for item in word_counter:
+            f.write("%s\n" % item)
+
     train_ratio = 0.8
     train_size = int(train_ratio*num_topic)
     validation_ratio = 0.1
@@ -150,8 +154,12 @@ def read_data_sets():
 def write_tfrecord(topics, name):
     # generate tf.record for train, validation, test group
     writer = tf.python_io.TFRecordWriter("%s.tfrecords" % name)
+    file_name = name + '_len_label_path.txt'
+    f = open(file_name, 'w')
     for t in topics:
         features, length, label, path = t.get_feature(longest_topic)
+        f.write("%d\t%d\t%s\n" % (length, label, path))
+
         example = tf.train.Example(features=tf.train.Features(feature={
             'tweets': _bytes_feature(features.tostring()),
             'length': _int64_feature(length),
@@ -160,6 +168,7 @@ def write_tfrecord(topics, name):
             'file_path': _byte_feature(tf.compat.as_bytes(path))
         }))
         writer.write(example.SerializeToString())
+    f.close()
     writer.close()
 
 read_data_sets()

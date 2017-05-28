@@ -14,8 +14,8 @@ logger.info('tensorflow version : ' + tf.__version__)
 tf.app.flags.DEFINE_integer('num_feature', 5000, 'Number of features')
 tf.app.flags.DEFINE_integer('num_hidden', 128, 'Number of hidden units of RNN cell')
 tf.app.flags.DEFINE_integer('num_layer', 3, 'Number of hidden layers')
-tf.app.flags.DEFINE_integer('batch_size', 8, 'Mini-batch size')
-tf.app.flags.DEFINE_integer('train_epochs', 1, 'Number of training epoch')
+tf.app.flags.DEFINE_integer('batch_size', 16, 'Mini-batch size')
+tf.app.flags.DEFINE_integer('train_epochs', 10, 'Number of training epoch')
 tf.app.flags.DEFINE_float('lr', 0.001, 'Learning rate')
 tf.app.flags.DEFINE_float('keep_prob', 1.0, 'Dropout keep probability')
 tf.app.flags.DEFINE_string('tf_records', '../data', 'TF records file dir path')
@@ -34,35 +34,40 @@ TEST_FILE = 'test.tfrecords'
 def random_interval(tweet, length, interval=(10,10)):
     min_len, max_len = interval
 
-    temp_len = length
-    current_len = 0
-    temp_tweet = None
-    count = 0
-    intervals = []
-    while True:
-        interval = np.random.randint(min_len, max_len+1)
-        temp_len -= interval
+    next_len = tf.constant(0,dtype=tf.int32)
+    current_len = tf.constant(0,dtype=tf.int32)
+    count = tf.constant(0,dtype=tf.int32)
+    temp_tweet = tf.constant(0, dtype=tf.float32, shape=[1,FLAGS.num_feature])
+
+    def condition(length, next_len, current_len, tweet, temp_tweet, count):
+        return tf.less(next_len, length)
+
+    def body(length, next_len, current_len, tweet, temp_tweet, count):
+        interval = tf.random_uniform([], min_len, max_len+1, dtype=tf.int32)
         next_len = current_len + interval
-        count += 1
-
-        if next_len >= length:
-            intervals.append([current_len, length])
-            break
-        else:
-            intervals.append([current_len, next_len])
+        next_len = tf.cond(tf.less(length, next_len),
+                lambda : length,
+                lambda : next_len)
+        summed = tf.reduce_sum(tweet[current_len:next_len], axis=0)
+        normed = tf.nn.l2_normalize(summed, dim=0)
+        temp = tf.reshape(normed, shape=[1, FLAGS.num_feature])
+        temp_tweet = tf.cond(tf.equal(count,0),
+                lambda : temp, 
+                lambda : tf.concat([temp_tweet, temp], axis=0))
         current_len += interval
-
-    for begin, end in intervals:
-        if begin == 0:
-            summed = tf.reduce_sum(tweet[current_len:next_len], axis=0)
-            normed = tf.nn.l2_normalize(summed, dim=0)
-            temp_tweet = tf.reshape(normed, shape=[1, FLAGS.num_feature])
-        else:
-            summed = tf.reduce_sum(tweet[current_len:next_len], axis=0)
-            normed = tf.nn.l2_normalize(summed, dim=0)
-            temp = tf.reshape(normed, shape=[1, FLAGS.num_feature])
-            temp_tweet = tf.concat([temp_tweet, temp], axis=0)
+        count += 1
+        return length, next_len, current_len, tweet, temp_tweet, count
     
+    loop_vars = [length, next_len, current_len, tweet, temp_tweet, count]
+    shape_inv = [length.get_shape(), next_len.get_shape(),
+            current_len.get_shape(), tweet.get_shape(), 
+            tf.TensorShape([None, FLAGS.num_feature]), count.get_shape()]
+
+    _, _, _, _, temp_tweet, _ = tf.while_loop(condition, body, loop_vars, 
+            shape_invariants=shape_inv)
+    
+    count = tf.shape(temp_tweet)[0]
+
     return temp_tweet, count
        
 def read_and_decode(filename_queue):
@@ -84,7 +89,7 @@ def read_and_decode(filename_queue):
   tweet = tf.reshape(tweet, [length, FLAGS.num_feature])
   path = features['file_path']
 
-  tweet, length = random_interval(tweet, length, interval=(8,12))
+  tweet, length = random_interval(tweet, length, interval=(7,13))
 
   return tweet, length, label, path
 
@@ -221,7 +226,7 @@ def main(_):
                 step = 0
                 while not coord.should_stop():
                     train_feed = { keep_prob: 1.0}
-                    summary, _, = sess.run([train_merged, train_op], feed_dict=train_feed)
+                    summary, _ = sess.run([train_merged, train_op], feed_dict=train_feed)
 
                     if step % 10 == 0:
                     #     summary = sess.run([train_merged], {keep_prob:1.0})
@@ -232,6 +237,7 @@ def main(_):
                     #     train_writer.add_summary(summary, step)
 
                     step += 1
+                    logger.info(step)
 
             except tf.errors.OutOfRangeError:
                 print('Done training for %d epochs, %d steps.' % (FLAGS.train_epochs, step))

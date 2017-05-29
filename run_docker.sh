@@ -13,4 +13,4 @@ nvidia-docker stop ${CONTAINER_NAME}
 nvidia-docker rm ${CONTAINER_NAME}
 
 # Run docker container
-nvidia-docker run --name ${CONTAINER_NAME} -v ${DATASET_DIR}:/dataset -v ${SUMMARY_DIR}:/summary -p 8888:8888 -p 6006:6006 -d ${REPOSITORY} $1
+nvidia-docker run --name ${CONTAINER_NAME} -v ${DATASET_DIR}:/dataset -v ${SUMMARY_DIR}:/summary -p 8888:8888 -p 6006:6006 -d ${REPOSITORY}

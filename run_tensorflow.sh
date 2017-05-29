@@ -11,26 +11,22 @@ EVAL_DIR=${TRAIN_DIR}/eval
 nohup tensorboard --logdir=${TRAIN_DIR} &> /dev/null &
 
 # Run Tensorflow
-if [ $1 = "train" ]; then
-    python ${TENSORFLOW_TRAIN} \
-    --train_dir=${TRAIN_DIR} \
-    --num_clones=2 \
-    --batch_size=32 \
-    --dataset_split_name=train \
-    --dataset_dir=${DATASET_DIR} \
-    --learning_rate=0.045 \
+python ${TENSORFLOW_TRAIN} \
+--train_dir=${TRAIN_DIR} \
+--batch_size=32 \
+--dataset_split_name=train \
+--dataset_dir=${DATASET_DIR} \
+--save_summaries_secs=30 \
+--save_interval_secs=30 \
+--learning_rate=0.01 \ &> /rumor/log.txt &
 
-elif [ $1 = "eval" ]; then
-    python ${TENSORFLOW_EVAL} \
-    --alsologtostderr \
-    --checkpoint_dir=${TRAIN_DIR} \
-    --eval_dir=${EVAL_DIR} \
-    --dataset_split_name=test \
-    --dataset_dir=${DATASET_DIR} \
-else
-    echo "Usage: run_tensorflow.sh [train|eval]"
-    exit 1
-fi
+python ${TENSORFLOW_EVAL} \
+--alsologtostderr \
+--checkpoint_dir=${TRAIN_DIR} \
+--eval_dir=${EVAL_DIR} \
+--dataset_split_name=test \
+--dataset_dir=${DATASET_DIR} \
+--eval_interval_secs=30
 
 
 

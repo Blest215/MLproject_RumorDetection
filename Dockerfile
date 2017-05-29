@@ -11,4 +11,4 @@ WORKDIR "/rumor"
 RUN mkdir /summary
 RUN mkdir /dataset
 
-ENTRYPOINT ["bash", "run_tensorflow.sh"]
+CMD ["bash", "run_tensorflow.sh"]

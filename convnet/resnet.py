@@ -147,11 +147,11 @@ def bottleneck(inputs,
                scope=None):
   """Bottleneck residual unit variant with BN before convolutions."""
   with variable_scope.variable_scope(scope, 'bottleneck_v2', [inputs]) as sc:
-    depth_in = utils.last_dimension(inputs.get_shape(), min_rank=4)
+    depth_in = utils.last_dimension(inputs.get_shape(), min_rank=3)
     preact = layers.batch_norm(
         inputs, activation_fn=nn_ops.relu, scope='preact')
     if depth == depth_in:
-      shortcut = resnet_utils.subsample(inputs, stride, 'shortcut')
+      shortcut = subsample(inputs, stride, 'shortcut')
     else:
       shortcut = layers.convolution(
           preact,
@@ -240,6 +240,7 @@ def resnet_v2(inputs,
               activation_fn=None,
               normalizer_fn=None,
               scope='logits')
+          net = tf.squeeze(net)
         # Convert end_points_collection into a dictionary of end_points.
         end_points = utils.convert_collection_to_dict(end_points_collection)
         if num_classes is not None:
@@ -255,10 +256,9 @@ def resnet(inputs,
            reuse=None,
            scope='resnet'):
     blocks = [
-        resnet_v2_block('block1', base_depth=64, num_units=3, stride=2),
-        resnet_v2_block('block2', base_depth=128, num_units=4, stride=2),
-        resnet_v2_block('block3', base_depth=256, num_units=6, stride=2),
-        resnet_v2_block('block4', base_depth=512, num_units=3, stride=1),
+        resnet_v2_block('block1', base_depth=64, num_units=1, stride=2),
+        resnet_v2_block('block2', base_depth=128, num_units=1, stride=2),
+        resnet_v2_block('block3', base_depth=256, num_units=1, stride=1),
     ]
     return resnet_v2(
         inputs,
@@ -267,10 +267,10 @@ def resnet(inputs,
         is_training,
         global_pool,
         output_stride,
-        include_root_block=True,
+        include_root_block=False,
         reuse=reuse,
         scope=scope)
-resnet.default_image_size = 224
+resnet.default_image_size = 8
 
 
 def get_resnet_func(num_classes, weight_decay=0.0, is_training=False):

@@ -20,11 +20,11 @@ tf.app.flags.DEFINE_string('dataset_directory', '/tmp/',
 tf.app.flags.DEFINE_string('output_directory', '/tmp/',
                            'Output data directory')
 
-tf.app.flags.DEFINE_integer('train_shards', 64,
+tf.app.flags.DEFINE_integer('train_shards', 32,
                             'Number of shards in training TFRecord files.')
-tf.app.flags.DEFINE_integer('validation_shards', 8,
+tf.app.flags.DEFINE_integer('validation_shards', 4,
                             'Number of shards in validation TFRecord files.')
-tf.app.flags.DEFINE_integer('test_shards', 8,
+tf.app.flags.DEFINE_integer('test_shards', 4,
                             'Number of shards in test TFRecord files.')
 
 tf.app.flags.DEFINE_integer('num_threads', 4,
@@ -83,7 +83,8 @@ class Topic:
 
     # output : array of feature
     def get_feature(self):
-        indices = []
+        ix0 = []
+        ix1 = []
         values = []
         for l, tweet in enumerate(self.tweets):
             word_counts = tweet[1]
@@ -91,11 +92,12 @@ class Topic:
             for word, count in word_counts.items():
                 for d, tup in enumerate(Topic.word_counts):
                     if word == tup[0]:
-                        indices.append(np.array([l, d]))
+                        ix0.append(l)
+                        ix1.append(d)
                         values.append(float(count) / float(num_words))
                         break
 
-        return indices, values, len(self.tweets), self.label, self.file_path
+        return ix0, ix1, values, len(self.tweets), self.label, self.file_path
 
 
 def filepath2topic(filepath):
@@ -197,9 +199,10 @@ def batch_write_tfrecord(thread_index, ranges, name, topics, num_shards):
         topics_in_shard = np.arange(shard_ranges[s], shard_ranges[s + 1], dtype=int)
         for i in topics_in_shard:
             topic = topics[i]
-            indices, values, length, label, path = topic.get_feature()
+            ix0, ix1, values, length, label, path = topic.get_feature()
             example = tf.train.Example(features=tf.train.Features(feature={
-                'tweets/indices': _bytes_feature([i.tostring() for i in indices]),
+                'tweets/ix0': _int64_feature(ix0),
+                'tweets/ix1': _int64_feature(ix1),
                 'tweets/values': _float_feature(values),
                 'tweets/shape': _int64_feature([length, FLAGS.num_words]),
                 'label': _int64_feature(label),

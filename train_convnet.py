@@ -23,6 +23,7 @@ from convnet.resnet import get_resnet_func
 import data
 
 from tensorflow.python.ops import control_flow_ops
+from tensorflow.python.ops import sparse_ops
 from deployment import model_deploy
 
 slim = tf.contrib.slim
@@ -404,9 +405,9 @@ def main(_):
     # Select the preprocessing function #
     #####################################
     # TODO: preprocessing
-    def identity(input, height, width):
-        return input
-    preprocessing_fn = identity
+    def random_crop(input, size):
+        return tf.random_crop(input, [size, 5000])
+    preprocessing_fn = random_crop
 
     ##############################################################
     # Create a dataset provider that loads data from the dataset #
@@ -417,12 +418,16 @@ def main(_):
           num_readers=FLAGS.num_readers,
           common_queue_capacity=20 * FLAGS.batch_size,
           common_queue_min=10 * FLAGS.batch_size)
-      [tweet, label] = provider.get(['tweets', 'label'])
+      [ix0, ix1, values, shape] = provider.get(['tweets/ix0', 'tweets/ix1', 'tweets/values', 'tweets/shape'])
+      indices = tf.stack([ix0, ix1], axis=1)
+      tweet = tf.SparseTensor(indices=indices, values=values, dense_shape=shape)
+      tweet = sparse_ops.sparse_tensor_to_dense(tweet, validate_indices=False)
+      [label] = provider.get(['label'])
       label -= FLAGS.labels_offset
 
       train_tweet_size = FLAGS.train_image_size or network_fn.default_image_size
 
-      tweet = preprocessing_fn(tweet, train_tweet_size, train_tweet_size)
+      tweet = preprocessing_fn(tweet, train_tweet_size)
 
       tweets, labels = tf.train.batch(
           [tweet, label],

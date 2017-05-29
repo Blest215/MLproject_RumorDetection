@@ -22,9 +22,9 @@ tf.app.flags.DEFINE_string('output_directory', '/tmp/',
 
 tf.app.flags.DEFINE_integer('train_shards', 32,
                             'Number of shards in training TFRecord files.')
-tf.app.flags.DEFINE_integer('validation_shards', 4,
+tf.app.flags.DEFINE_integer('validation_shards', 8,
                             'Number of shards in validation TFRecord files.')
-tf.app.flags.DEFINE_integer('test_shards', 4,
+tf.app.flags.DEFINE_integer('test_shards', 8,
                             'Number of shards in test TFRecord files.')
 
 tf.app.flags.DEFINE_integer('num_threads', 4,
@@ -139,8 +139,8 @@ def read_data_sets():
           (len(matching_files), data_dir))
 
     write_tfrecord(train, "train", FLAGS.train_shards)
-    # write_tfrecord(validation, "valid", FLAGS.validation_shards)
-    # write_tfrecord(test, "test", FLAGS.test_shards)
+    write_tfrecord(validation, "valid", FLAGS.validation_shards)
+    write_tfrecord(test, "test", FLAGS.test_shards)
 
 
 def write_tfrecord(topics, name, num_shards):

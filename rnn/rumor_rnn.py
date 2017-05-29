@@ -15,9 +15,9 @@ tf.app.flags.DEFINE_integer('num_feature', 5000, 'Number of features')
 tf.app.flags.DEFINE_integer('num_hidden', 128, 'Number of hidden units of RNN cell')
 tf.app.flags.DEFINE_integer('num_layer', 3, 'Number of hidden layers')
 tf.app.flags.DEFINE_integer('batch_size', 16, 'Mini-batch size')
-tf.app.flags.DEFINE_integer('train_epochs', 10, 'Number of training epoch')
+tf.app.flags.DEFINE_integer('train_epochs', 200, 'Number of training epoch')
 tf.app.flags.DEFINE_float('lr', 0.001, 'Learning rate')
-tf.app.flags.DEFINE_float('keep_prob', 1.0, 'Dropout keep probability')
+tf.app.flags.DEFINE_float('keep_prob', 0.5, 'Dropout keep probability')
 tf.app.flags.DEFINE_string('tf_records', '../data', 'TF records file dir path')
 tf.app.flags.DEFINE_string(
     'checkpoint_dir', '/tmp/rumor_rnn',
@@ -31,7 +31,7 @@ TRAIN_FILE = 'train.tfrecords'
 VALIDATION_FILE = 'valid.tfrecords'
 TEST_FILE = 'test.tfrecords'
 
-def random_interval(tweet, length, interval=(10,10)):
+def random_interval(tweet, length, interval):
     min_len, max_len = interval
 
     next_len = tf.constant(0,dtype=tf.int32)
@@ -70,7 +70,7 @@ def random_interval(tweet, length, interval=(10,10)):
 
     return temp_tweet, count
        
-def read_and_decode(filename_queue):
+def read_and_decode(filename_queue, interval):
   reader = tf.TFRecordReader()
   _, serialized_example = reader.read(filename_queue)
   features = tf.parse_single_example(
@@ -89,12 +89,13 @@ def read_and_decode(filename_queue):
   tweet = tf.reshape(tweet, [length, FLAGS.num_feature])
   path = features['file_path']
 
-  tweet, length = random_interval(tweet, length, interval=(7,13))
+  tweet, length = random_interval(tweet, length, interval)
 
   return tweet, length, label, path
 
 
-def inputs(train, batch_size, num_epochs):
+def inputs(train, batch_size, num_epochs, num_threads, capacity,
+        interval=(10,10)):
   if not num_epochs: num_epochs = None
 
   if train=='train':
@@ -108,11 +109,11 @@ def inputs(train, batch_size, num_epochs):
     filename_queue = tf.train.string_input_producer(
         [filename], num_epochs=num_epochs)
 
-    tweet, length, label, path = read_and_decode(filename_queue)
+    tweet, length, label, path = read_and_decode(filename_queue, interval)
 
     tweets, lengths, labels, paths = tf.train.batch(
-        [tweet, length, label, path], batch_size=FLAGS.batch_size, num_threads=2,
-        capacity= 3 * batch_size, dynamic_pad = True)
+            [tweet, length, label, path], batch_size=FLAGS.batch_size,
+            num_threads=num_threads, capacity=capacity, dynamic_pad = True)
         # Ensures a minimum amount of shuffling of examples.
         # min_after_dequeue=1000)
 
@@ -130,13 +131,13 @@ def main(_):
 
     with graph.as_default():
 
-        train_inputs, train_inputs_length, train_labels, train_paths = inputs('train', batch_size, FLAGS.train_epochs)
+        train_inputs, train_inputs_length, train_labels, train_paths = inputs('train', batch_size, FLAGS.train_epochs, 2, 3*batch_size, (6,14))
 
         logger.info(train_inputs)
 
-        valid_inputs, valid_inputs_length, valid_labels, valid_paths = inputs('valid', 1, 1)
+        valid_inputs, valid_inputs_length, valid_labels, valid_paths = inputs('valid', 10, None, 1, 20)
 
-        test_inputs, test_inputs_length, test_labels, test_paths = inputs('test', 1, 1)
+        test_inputs, test_inputs_length, test_labels, test_paths = inputs('test', 10, None, 1, 20)
         
         keep_prob = tf.placeholder(tf.float32)
 
@@ -189,9 +190,12 @@ def main(_):
 
         train_merged = tf.summary.merge([tf.summary.scalar('train_loss', loss),
                                          tf.summary.scalar('train_accuracy', train_accuracy)])
-
-        test_merged = tf.summary.merge([tf.summary.scalar('valid_accuracy', valid_accuracy),
-                                        tf.summary.scalar('test_accuracy', test_accuracy)])
+        
+        valid_acc = tf.placeholder(tf.float32)
+        test_acc = tf.placeholder(tf.float32)
+        # test_merged = tf.summary.merge([tf.summary.scalar('test_accuracy', test_accuracy), tf.summary.scalar('valid_accuracy', valid_accuracy)])
+        valid_summary = tf.summary.scalar('valid_accuracy', valid_acc)
+        test_summary = tf.summary.scalar('test_accuracy', test_acc)
 
         saver = tf.train.Saver()
     
@@ -225,19 +229,27 @@ def main(_):
             try:
                 step = 0
                 while not coord.should_stop():
-                    train_feed = { keep_prob: 1.0}
-                    summary, _ = sess.run([train_merged, train_op], feed_dict=train_feed)
+                    train_feed = { keep_prob: FLAGS.keep_prob}
+                    summary, _, path = sess.run([train_merged, train_op, train_paths], feed_dict=train_feed)
 
                     if step % 10 == 0:
-                    #     summary = sess.run([train_merged], {keep_prob:1.0})
                         train_writer.add_summary(summary, step)
             
-                    # if step % 1000 == 0:
-                    #     summary = sess.run([test_merged], feed)
-                    #     train_writer.add_summary(summary, step)
+                    if step % 100 == 0:
+                        temp_v = 0
+                        temp_t = 0
+                        for i in xrange(10):
+                            valid, test = sess.run([valid_accuracy, test_accuracy], {keep_prob:1.0})
+                            temp_v += valid
+                            temp_t += test
+                        temp_v = temp_v / 10.0
+                        temp_t = temp_t / 10.0
+
+                        test_, valid_ = sess.run([test_summary, valid_summary], {test_acc:temp_t, valid_acc:temp_v})
+                        train_writer.add_summary(test_, step)
+                        train_writer.add_summary(valid_, step)
 
                     step += 1
-                    logger.info(step)
 
             except tf.errors.OutOfRangeError:
                 print('Done training for %d epochs, %d steps.' % (FLAGS.train_epochs, step))

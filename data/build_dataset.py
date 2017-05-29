@@ -38,13 +38,13 @@ FLAGS = tf.app.flags.FLAGS
 def _int64_feature(value):
     if not isinstance(value, list):
         value = [value]
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
 
 
 def _float_feature(value):
     if not isinstance(value, list):
         value = [value]
-    return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
+    return tf.train.Feature(float_list=tf.train.FloatList(value=value))
 
 
 def _bytes_feature(value):
@@ -92,7 +92,7 @@ class Topic:
                 for d, tup in enumerate(Topic.word_counts):
                     if word == tup[0]:
                         indices.append(np.array([l, d]))
-                        values.append(float(count / num_words))
+                        values.append(float(count) / float(num_words))
                         break
 
         return indices, values, len(self.tweets), self.label, self.file_path
@@ -199,7 +199,7 @@ def batch_write_tfrecord(thread_index, ranges, name, topics, num_shards):
             topic = topics[i]
             indices, values, length, label, path = topic.get_feature()
             example = tf.train.Example(features=tf.train.Features(feature={
-                'tweets/indices': _bytes_feature(i.tostring() for i in indices),
+                'tweets/indices': _bytes_feature([i.tostring() for i in indices]),
                 'tweets/values': _float_feature(values),
                 'tweets/shape': _int64_feature([length, FLAGS.num_words]),
                 'label': _int64_feature(label),

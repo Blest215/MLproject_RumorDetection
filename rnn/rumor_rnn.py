@@ -138,6 +138,8 @@ def main(_):
         valid_inputs, valid_inputs_length, valid_labels, valid_paths = inputs('valid', 10, None, 1, 20)
 
         test_inputs, test_inputs_length, test_labels, test_paths = inputs('test', 10, None, 1, 20)
+
+        global_step = tf.Variable(0, trainable=False)
         
         keep_prob = tf.placeholder(tf.float32)
 
@@ -174,7 +176,14 @@ def main(_):
         
         loss = tf.reduce_mean(cross_entropy)
 
-        train_op = tf.train.AdamOptimizer(FLAGS.lr).minimize(loss)
+        params = tf.trainable_variables()
+        opt = tf.train.AdamOptimizer(FLAGS.lr)
+        grads_and_vars = opt.compute_gradients(loss, params)
+        clipped_grads_and_vars = [(tf.clip_by_norm(grad, 5.0),
+            var) for grad, var in grads_and_vars]
+
+        train_op = opt.apply_gradients(clipped_grads_and_vars,
+                global_step=global_step)
 
         train_prediction = tf.argmax(logits, 1)
         valid_prediction = tf.argmax(model(valid_inputs, valid_inputs_length, True), 1)

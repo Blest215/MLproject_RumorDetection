@@ -163,9 +163,6 @@ tf.app.flags.DEFINE_float(
 #######################
 
 tf.app.flags.DEFINE_string(
-    'dataset_name', 'imagenet', 'The name of the dataset to load.')
-
-tf.app.flags.DEFINE_string(
     'dataset_split_name', 'train', 'The name of the train/test split.')
 
 tf.app.flags.DEFINE_string(
@@ -176,13 +173,6 @@ tf.app.flags.DEFINE_integer(
     'An offset for the labels in the dataset. This flag is primarily used to '
     'evaluate the VGG and ResNet architectures which do not use a background '
     'class for the ImageNet dataset.')
-
-tf.app.flags.DEFINE_string(
-    'model_name', 'inception_v3', 'The name of the architecture to train.')
-
-tf.app.flags.DEFINE_string(
-    'preprocessing_name', None, 'The name of the preprocessing to use. If left '
-    'as `None`, then the model_name flag is used.')
 
 tf.app.flags.DEFINE_integer(
     'batch_size', 32, 'The number of samples in each batch.')
@@ -413,11 +403,10 @@ def main(_):
     #####################################
     # Select the preprocessing function #
     #####################################
-    preprocessing_name = FLAGS.preprocessing_name or FLAGS.model_name
     # TODO: preprocessing
     def identity(input, height, width):
         return input
-    image_preprocessing_fn = identity
+    preprocessing_fn = identity
 
     ##############################################################
     # Create a dataset provider that loads data from the dataset #
@@ -428,30 +417,30 @@ def main(_):
           num_readers=FLAGS.num_readers,
           common_queue_capacity=20 * FLAGS.batch_size,
           common_queue_min=10 * FLAGS.batch_size)
-      [image, label] = provider.get(['image', 'label'])
+      [tweet, label] = provider.get(['tweets', 'label'])
       label -= FLAGS.labels_offset
 
-      train_image_size = FLAGS.train_image_size or network_fn.default_image_size
+      train_tweet_size = FLAGS.train_image_size or network_fn.default_image_size
 
-      image = image_preprocessing_fn(image, train_image_size, train_image_size)
+      tweet = preprocessing_fn(tweet, train_tweet_size, train_tweet_size)
 
-      images, labels = tf.train.batch(
-          [image, label],
+      tweets, labels = tf.train.batch(
+          [tweet, label],
           batch_size=FLAGS.batch_size,
           num_threads=FLAGS.num_preprocessing_threads,
           capacity=5 * FLAGS.batch_size)
       labels = slim.one_hot_encoding(
           labels, dataset.num_classes - FLAGS.labels_offset)
       batch_queue = slim.prefetch_queue.prefetch_queue(
-          [images, labels], capacity=2 * deploy_config.num_clones)
+          [tweets, labels], capacity=2 * deploy_config.num_clones)
 
     ####################
     # Define the model #
     ####################
     def clone_fn(batch_queue):
       """Allows data parallelism by creating multiple clones of network_fn."""
-      images, labels = batch_queue.dequeue()
-      logits, end_points = network_fn(images)
+      tweets, labels = batch_queue.dequeue()
+      logits, end_points = network_fn(tweets)
 
       #############################
       # Specify the loss function #

@@ -54,12 +54,12 @@ def get_split(split_name, dataset_dir, file_pattern=None, reader=None):
     reader = tf.TFRecordReader
 
   keys_to_features = {
-      'tweets': tf.FixedLenFeature(
-          [], tf.int64),
-      'length': tf.FixedLenFeature(
-          [], tf.int64),
-      'vector_size': tf.FixedLenFeature(
-          [], tf.int64),
+      'tweets/indices': tf.VarLenFeature(
+          dtype=tf.int64),
+      'tweets/values': tf.VarLenFeature(
+          dtype=tf.float32),
+      'tweets/shape': tf.FixedLenFeature(
+          [], dtype=tf.int64),
       'label': tf.FixedLenFeature(
           [], dtype=tf.int64),
       'file_path': tf.FixedLenFeature(
@@ -67,7 +67,11 @@ def get_split(split_name, dataset_dir, file_pattern=None, reader=None):
   }
 
   items_to_handlers = {
-      'tweets': slim.tfexample_decoder.Tensor('tweets'),
+      'tweets': slim.tfexample_decoder.SparseTensor(
+          indices_key='tweets/indices',
+          values_key='tweets/values',
+          shape_key='tweets/shape',
+          densify=True),
       'label': slim.tfexample_decoder.Tensor('label'),
   }
 

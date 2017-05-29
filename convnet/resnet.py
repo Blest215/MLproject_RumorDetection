@@ -254,18 +254,22 @@ def resnet(inputs,
            output_stride=None,
            reuse=None,
            scope='resnet'):
-  blocks = [
-      resnet_utils.Block(
-          'block1', bottleneck, [(256, 64, 1)] * 2 + [(256, 64, 2)]),
-      resnet_utils.Block(
-          'block2', bottleneck, [(512, 128, 1)] * 3 + [(512, 128, 2)]),
-      resnet_utils.Block(
-          'block3', bottleneck, [(1024, 256, 1)] * 5 + [(1024, 256, 2)]),
-      resnet_utils.Block(
-          'block4', bottleneck, [(2048, 512, 1)] * 3)]
-  return resnet_v2(inputs, blocks, num_classes, is_training=is_training,
-                   global_pool=global_pool, output_stride=output_stride,
-                   include_root_block=True, reuse=reuse, scope=scope)
+    blocks = [
+        resnet_v2_block('block1', base_depth=64, num_units=3, stride=2),
+        resnet_v2_block('block2', base_depth=128, num_units=4, stride=2),
+        resnet_v2_block('block3', base_depth=256, num_units=6, stride=2),
+        resnet_v2_block('block4', base_depth=512, num_units=3, stride=1),
+    ]
+    return resnet_v2(
+        inputs,
+        blocks,
+        num_classes,
+        is_training,
+        global_pool,
+        output_stride,
+        include_root_block=True,
+        reuse=reuse,
+        scope=scope)
 resnet.default_image_size = 224
 
 

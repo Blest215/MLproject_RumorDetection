@@ -254,7 +254,6 @@ def resnet(inputs,
            output_stride=None,
            reuse=None,
            scope='resnet'):
-  """ResNet-50 model of [1]. See resnet_v2() for arg and return description."""
   blocks = [
       resnet_utils.Block(
           'block1', bottleneck, [(256, 64, 1)] * 2 + [(256, 64, 2)]),
@@ -267,8 +266,10 @@ def resnet(inputs,
   return resnet_v2(inputs, blocks, num_classes, is_training=is_training,
                    global_pool=global_pool, output_stride=output_stride,
                    include_root_block=True, reuse=reuse, scope=scope)
+resnet.default_image_size = 224
 
-def get_resnet_func(name, num_classes, weight_decay=0.0, is_training=False):
+
+def get_resnet_func(num_classes, weight_decay=0.0, is_training=False):
     """Returns a network_fn such as `logits, end_points = network_fn(images)`.
 
     Args:

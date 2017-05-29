@@ -20,6 +20,7 @@ from __future__ import print_function
 
 import tensorflow as tf
 from convnet.resnet import get_resnet_func
+import data
 
 from tensorflow.python.ops import control_flow_ops
 from deployment import model_deploy
@@ -398,15 +399,13 @@ def main(_):
     ######################
     # Select the dataset #
     ######################
-    # TODO: dataset
-    dataset = dataset_factory.get_dataset(
-        FLAGS.dataset_name, FLAGS.dataset_split_name, FLAGS.dataset_dir)
+    dataset = data.dataset.get_split(
+        FLAGS.dataset_split_name, FLAGS.dataset_dir)
 
     ######################
     # Select the network #
     ######################
     network_fn = get_resnet_func(
-        FLAGS.model_name,
         num_classes=(dataset.num_classes - FLAGS.labels_offset),
         weight_decay=FLAGS.weight_decay,
         is_training=True)
@@ -416,9 +415,9 @@ def main(_):
     #####################################
     preprocessing_name = FLAGS.preprocessing_name or FLAGS.model_name
     # TODO: preprocessing
-    image_preprocessing_fn = preprocessing_factory.get_preprocessing(
-        preprocessing_name,
-        is_training=True)
+    def identity(input, height, width):
+        return input
+    image_preprocessing_fn = identity
 
     ##############################################################
     # Create a dataset provider that loads data from the dataset #

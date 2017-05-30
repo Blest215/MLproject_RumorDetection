@@ -90,23 +90,21 @@ class Topic:
 
             # Count words
             term_counts = defaultdict(int)
-            doc_counts = defaultdict(int)
             for word in words:
                 word = word.encode('ascii', 'ignore')
                 term_counts[word] += 1
-                if word not in doc_counts:
-                    doc_counts[word] = 1
 
             # Update word counter
             self.term_counter.update(term_counts)
-            self.doc_counter.update(doc_counts)
 
             return created_at, term_counts
 
         topic_file = open(file_path)
         self.tweets = map(line2textblob, topic_file)
         self.tweets = sorted(self.tweets, key=lambda x: x[0])
-        # print self.term_counter.keys()
+
+        for term in self.term_counter:
+            self.doc_counter.update({term: 1})
 
     # output : array of feature
     def get_feature(self):

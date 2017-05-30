@@ -18,7 +18,7 @@ python ${TENSORFLOW_TRAIN} \
 --dataset_dir=${DATASET_DIR} \
 --save_summaries_secs=30 \
 --save_interval_secs=30 \
---learning_rate=0.0001 \ &> /rumor/log.txt &
+--learning_rate=0.00001 \ &> /rumor/log.txt &
 
 python ${TENSORFLOW_EVAL} \
 --alsologtostderr \

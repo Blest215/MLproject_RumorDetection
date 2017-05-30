@@ -1,19 +1,22 @@
 import os
 import sys
 import json
-import operator
 import re
-import math
 import random
 import threading
+import operator
+import unicodedata
 
 import tensorflow as tf
 import numpy as np
 
-from datetime import datetime, timedelta
-from multiprocessing import Pool
-from textblob import TextBlob as tb
+from datetime import datetime
+from multiprocessing import Pool, Lock
 from collections import Counter
+from collections import defaultdict
+from textblob import TextBlob as tb
+from textblob import WordList
+from textblob.utils import filter_insignificant, lowerstrip
 
 tf.app.flags.DEFINE_string('dataset_directory', '/tmp/',
                            'Data directory')
@@ -58,28 +61,52 @@ def _byte_feature(value):
 def get_words(text):
     return re.compile('\w+').findall(text)
 
+lock = Lock()
 
 class Topic:
-    word_counts = None
+    tf_idfs = defaultdict(float)
     def __init__(self, file_path, label):
         # parsing data
         self.file_path = file_path
         self.label = label
-        self.word_counter = Counter()
+        self.term_counter = Counter()
+        self.doc_counter = Counter()
 
         def line2textblob(line):
             """Convert line(tweet) to TextBlob"""
             json_obj = json.loads(line)
             text = json_obj['text']
+
             created_at = datetime.strptime(json_obj['created_at'], "%a %b %d %H:%M:%S +0000 %Y")
             textblob = tb(text)
-            self.word_counter.update(textblob.word_counts)
 
-            return created_at, textblob.word_counts, len(textblob.words)
+            # Filter insignificant words
+            tags = textblob.pos_tags
+            tags = filter_insignificant(tags, tag_suffixes=('DT', 'CC', 'PRP$', 'PRP', 'IN', 'TO', 'POS', 'CD'))
+
+            # Prevent duplicate
+            words = WordList([lowerstrip(t[0]) for t in tags])
+            words = words.singularize()
+
+            # Count words
+            term_counts = defaultdict(int)
+            doc_counts = defaultdict(int)
+            for word in words:
+                word = word.encode('ascii', 'ignore')
+                term_counts[word] += 1
+                if word not in doc_counts:
+                    doc_counts[word] = 1
+
+            # Update word counter
+            self.term_counter.update(term_counts)
+            self.doc_counter.update(doc_counts)
+
+            return created_at, term_counts
 
         topic_file = open(file_path)
         self.tweets = map(line2textblob, topic_file)
-        self.tweets.sort()
+        self.tweets = sorted(self.tweets, key=lambda x: x[0])
+        # print self.term_counter.keys()
 
     # output : array of feature
     def get_feature(self):
@@ -88,19 +115,24 @@ class Topic:
         values = []
         for l, tweet in enumerate(self.tweets):
             word_counts = tweet[1]
-            num_words = tweet[2]
             for word, count in word_counts.items():
-                for d, tup in enumerate(Topic.word_counts):
-                    if word == tup[0]:
-                        ix0.append(l)
-                        ix1.append(d)
-                        values.append(float(count) / float(num_words))
-                        break
+                try:
+                    d = Topic.tf_idfs[word]
+                except KeyError:
+                    continue
+                ix0.append(l)
+                ix1.append(d)
+                values.append(count)
 
         return ix0, ix1, values, len(self.tweets), self.label, self.file_path
 
-
+counter = 0
 def filepath2topic(filepath):
+    with lock:
+        global counter
+        counter += 1
+        sys.stdout.write('\rTopic %s/992' % counter)
+        sys.stdout.flush()
     return Topic(filepath, int('nonrumor' not in filepath))
 
 def read_data_sets():
@@ -111,18 +143,31 @@ def read_data_sets():
 
     jpeg_file_path = '%s/*' % data_dir
     matching_files = tf.gfile.Glob(jpeg_file_path)
+
     topics = Pool(FLAGS.num_threads).map(filepath2topic, matching_files)
+
     # shuffle topics
     random.shuffle(topics)
 
-    def merge_word_counters(accum, topic):
-        accum.update(topic.word_counter)
+    def merge_counters(accum, counter):
+        accum.update(counter)
         return accum
 
-    merged_counters = reduce(merge_word_counters, topics, Counter())
+    merged_term_counters = reduce(lambda a, b: merge_counters(a, b.term_counter), topics, Counter())
+    merged_doc_counters = reduce(lambda a, b: merge_counters(a, b.doc_counter), topics, Counter())
+    for w, t in merged_term_counters.items():
+        df = merged_doc_counters[w]
+        Topic.tf_idfs[w] = float(t) / float(df)
 
     # sort word_counter and extract top FLAGS.K words
-    Topic.word_counts = merged_counters.most_common(FLAGS.num_words)
+    Topic.tf_idfs = sorted(Topic.tf_idfs.items(), key=operator.itemgetter(1), reverse=True)[:FLAGS.num_words]
+    f = open(os.path.join(FLAGS.output_directory, 'most_common.txt'), 'w')
+    dictionary = defaultdict(int)
+    for idx, word in enumerate(Topic.tf_idfs):
+        f.writelines('{}\n'.format(str(word)))
+        dictionary[word[0]] = idx
+    Topic.tf_idfs = dictionary
+    f.close()
 
     # Split dataset
     num_topics = len(topics)
@@ -203,7 +248,7 @@ def batch_write_tfrecord(thread_index, ranges, name, topics, num_shards):
             example = tf.train.Example(features=tf.train.Features(feature={
                 'tweets/ix0': _int64_feature(ix0),
                 'tweets/ix1': _int64_feature(ix1),
-                'tweets/values': _float_feature(values),
+                'tweets/values': _int64_feature(values),
                 'tweets/shape': _int64_feature([length, FLAGS.num_words]),
                 'label': _int64_feature(label),
                 'file_path': _byte_feature(tf.compat.as_bytes(path))
@@ -229,6 +274,13 @@ def batch_write_tfrecord(thread_index, ranges, name, topics, num_shards):
 
 
 def main(_):
+    assert not FLAGS.train_shards % FLAGS.num_threads, (
+        'Please make the FLAGS.num_threads commensurate with FLAGS.train_shards')
+    assert not FLAGS.validation_shards % FLAGS.num_threads, (
+        'Please make the FLAGS.num_threads commensurate with '
+        'FLAGS.validation_shards')
+    print('Saving results to %s' % FLAGS.output_directory)
+
     read_data_sets()
 
 if __name__ == '__main__':

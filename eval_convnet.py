@@ -19,7 +19,7 @@ from __future__ import division
 from __future__ import print_function
 
 import math
-import data
+from data import dataset as dset
 
 import tensorflow as tf
 from convnet.resnet import get_resnet_func
@@ -30,7 +30,7 @@ from tensorflow.contrib.training.python.training import evaluation
 slim = tf.contrib.slim
 
 tf.app.flags.DEFINE_integer(
-    'batch_size', 100, 'The number of samples in each batch.')
+    'batch_size', 1, 'The number of samples in each batch.')
 
 tf.app.flags.DEFINE_integer(
     'max_num_batches', None,
@@ -88,7 +88,7 @@ def main(_):
     ######################
     # Select the dataset #
     ######################
-    dataset = data.dataset.get_split(
+    dataset = dset.get_split(
         FLAGS.dataset_split_name, FLAGS.dataset_dir)
 
     ####################
@@ -123,13 +123,8 @@ def main(_):
 
     eval_image_size = FLAGS.eval_image_size or network_fn.default_image_size
 
-    tweet = preprocessing_fn(tweet, eval_image_size)
-
-    tweets, labels = tf.train.batch(
-        [tweet, label],
-        batch_size=FLAGS.batch_size,
-        num_threads=FLAGS.num_preprocessing_threads,
-        capacity=5 * FLAGS.batch_size)
+    tweets = tf.reshape(tweet, [1, -1, 5000])
+    labels = label
 
     ####################
     # Define the model #
@@ -145,7 +140,7 @@ def main(_):
     else:
       variables_to_restore = slim.get_variables_to_restore()
 
-    predictions = tf.argmax(logits, 1)
+    predictions = tf.argmax(logits, 0)
     labels = tf.squeeze(labels)
 
     # Define the metrics:

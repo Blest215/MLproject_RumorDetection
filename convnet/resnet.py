@@ -147,7 +147,10 @@ def bottleneck(inputs,
                scope=None):
   """Bottleneck residual unit variant with BN before convolutions."""
   with variable_scope.variable_scope(scope, 'bottleneck_v2', [inputs]) as sc:
-    depth_in = utils.last_dimension(inputs.get_shape(), min_rank=3)
+    try:
+        depth_in = utils.last_dimension(inputs.get_shape(), min_rank=3)
+    except ValueError:
+        depth_in = 5000
     preact = layers.batch_norm(
         inputs, activation_fn=nn_ops.relu, scope='preact')
     if depth == depth_in:
@@ -244,7 +247,10 @@ def resnet_v2(inputs,
         # Convert end_points_collection into a dictionary of end_points.
         end_points = utils.convert_collection_to_dict(end_points_collection)
         if num_classes is not None:
-          end_points['predictions'] = layers.softmax(net, scope='predictions')
+          try:
+            end_points['predictions'] = layers.softmax(net, scope='predictions')
+          except ValueError:
+            end_points['predictions'] = layers.softmax(tf.reshape(net, [1, num_classes]), scope='predictions')
         return net, end_points
 
 
@@ -256,9 +262,9 @@ def resnet(inputs,
            reuse=None,
            scope='resnet'):
     blocks = [
-        resnet_v2_block('block1', base_depth=64, num_units=3, stride=2),
-        resnet_v2_block('block2', base_depth=128, num_units=4, stride=2),
-        resnet_v2_block('block3', base_depth=256, num_units=6, stride=1),
+        resnet_v2_block('block1', base_depth=128, num_units=3, stride=2),
+        resnet_v2_block('block2', base_depth=256, num_units=4, stride=2),
+        resnet_v2_block('block3', base_depth=512, num_units=6, stride=1),
     ]
     return resnet_v2(
         inputs,

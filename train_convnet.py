@@ -20,7 +20,7 @@ from __future__ import print_function
 
 import tensorflow as tf
 from convnet.resnet import get_resnet_func
-import data
+from data import dataset as dset
 
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import sparse_ops
@@ -390,7 +390,7 @@ def main(_):
     ######################
     # Select the dataset #
     ######################
-    dataset = data.dataset.get_split(
+    dataset = dset.get_split(
         FLAGS.dataset_split_name, FLAGS.dataset_dir)
 
     ######################

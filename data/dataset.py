@@ -59,7 +59,7 @@ def get_split(split_name, dataset_dir, file_pattern=None, reader=None):
       'tweets/ix1': tf.VarLenFeature(
           dtype=tf.int64),
       'tweets/values': tf.VarLenFeature(
-          dtype=tf.float32),
+          dtype=tf.int64),
       'tweets/shape': tf.FixedLenFeature(
           [2], dtype=tf.int64),
       'label': tf.FixedLenFeature(

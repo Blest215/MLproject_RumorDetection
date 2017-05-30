@@ -264,7 +264,7 @@ def resnet(inputs,
     blocks = [
         resnet_v2_block('block1', base_depth=128, num_units=3, stride=2),
         resnet_v2_block('block2', base_depth=256, num_units=4, stride=2),
-        resnet_v2_block('block3', base_depth=512, num_units=23, stride=1),
+        resnet_v2_block('block3', base_depth=512, num_units=6, stride=1),
     ]
 
     inputs = tf.to_float(inputs)
@@ -275,7 +275,7 @@ def resnet(inputs,
         is_training,
         global_pool,
         output_stride,
-        include_root_block=False,
+        include_root_block=True,
         reuse=reuse,
         scope=scope)
 resnet.default_image_size = 8

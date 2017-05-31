@@ -304,7 +304,7 @@ def resnet(inputs,
         include_root_block=True,
         reuse=reuse,
         scope=scope)
-resnet.default_image_size = 96
+resnet.default_image_size = 64
 
 
 def get_resnet_func(num_classes, weight_decay=0.0, is_training=False):

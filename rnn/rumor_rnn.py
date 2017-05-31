@@ -5,6 +5,7 @@ from tensorflow.contrib.slim import xavier_initializer
 import logging
 import os.path
 
+
 logging.basicConfig(level=logging.DEBUG,
         format = "%(levelname) -1s %(asctime)s %(module)s:%(lineno)s %(funcName)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -14,8 +15,8 @@ logger.info('tensorflow version : ' + tf.__version__)
 tf.app.flags.DEFINE_integer('num_feature', 5000, 'Number of features')
 tf.app.flags.DEFINE_integer('num_hidden', 128, 'Number of hidden units of RNN cell')
 tf.app.flags.DEFINE_integer('num_layer', 3, 'Number of hidden layers')
-tf.app.flags.DEFINE_integer('batch_size', 16, 'Mini-batch size')
-tf.app.flags.DEFINE_integer('train_epochs', 200, 'Number of training epoch')
+tf.app.flags.DEFINE_integer('batch_size', 8, 'Mini-batch size')
+tf.app.flags.DEFINE_integer('train_epochs', 40, 'Number of training epoch')
 tf.app.flags.DEFINE_float('lr', 0.001, 'Learning rate')
 tf.app.flags.DEFINE_float('keep_prob', 0.5, 'Dropout keep probability')
 tf.app.flags.DEFINE_string('tf_records', '../data', 'TF records file dir path')
@@ -131,7 +132,7 @@ def main(_):
 
     with graph.as_default():
 
-        train_inputs, train_inputs_length, train_labels, train_paths = inputs('train', batch_size, FLAGS.train_epochs, 2, 3*batch_size, (6,14))
+        train_inputs, train_inputs_length, train_labels, train_paths = inputs('train', batch_size, FLAGS.train_epochs, 2, 3*batch_size, (8,12))
 
         logger.info(train_inputs)
 
@@ -242,9 +243,10 @@ def main(_):
                     summary, _, path = sess.run([train_merged, train_op, train_paths], feed_dict=train_feed)
 
                     if step % 10 == 0:
+                        logger.info(step)
                         train_writer.add_summary(summary, step)
             
-                    if step % 100 == 0:
+                    if step % 100 == 0 and step!=0:
                         temp_v = 0
                         temp_t = 0
                         for i in xrange(10):
@@ -258,6 +260,9 @@ def main(_):
                         train_writer.add_summary(test_, step)
                         train_writer.add_summary(valid_, step)
 
+                        model_path = FLAGS.checkpoint_dir + '/model.ckpt'
+                        save_path = saver.save(sess, model_path, step)
+                        logger.info("Model saved in file %s" % save_path)
                     step += 1
 
             except tf.errors.OutOfRangeError:
@@ -286,7 +291,7 @@ def main(_):
             #         train_writer.add_summary(summary, step)
     
             model_path = FLAGS.checkpoint_dir + '/model.ckpt'
-            save_path = saver.save(sess, model_path)
+            save_path = saver.save(sess, model_path, step)
             logger.info("Model saved in file %s" % save_path)
             train_writer.close()
 

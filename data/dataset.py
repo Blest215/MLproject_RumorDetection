@@ -9,6 +9,8 @@ import re
 import math
 import random
 from textblob import TextBlob as tb
+import textblob
+from collections import Counter
 
 word_counter = {}
 longest_topic = 0
@@ -29,7 +31,12 @@ def _byte_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 def getWords(text):
-    return re.compile('\w+').findall(text)
+    t = text.lower().decode('ascii', errors="ignore")
+    t = re.compile('\w+').findall(t)
+    words = textblob.WordList(t)
+    words = words.singularize()
+    return words.lemmatize()
+    # return re.compile('\w+').findall(text.lower())
 
 
 class Topic:
@@ -87,6 +94,7 @@ class Topic:
 
         features = []
         counter = 0
+        key = []
         for data in self.tf_data:
             global word_counter
             vector = {}
@@ -97,8 +105,9 @@ class Topic:
                     vector[w] += data[w]
             features.append(numpy.array(list(vector.values())))
             counter += 1
+            key = vector.keys()
 
-        return numpy.array(features), len(features), self.label, self.file_path
+        return numpy.array(features), len(features), self.label, self.file_path, key
 
 # read data from files in directory
 def read_data_sets():
@@ -147,6 +156,17 @@ def read_data_sets():
     for t in topics:
         test.append(t)
 
+    _, _, _, _, keys = train[0].get_feature(longest_topic)
+    _, _, _, _, keys2 = train[1].get_feature(longest_topic)
+
+    with open('keys.txt', 'w') as f:
+        for key in keys:
+            f.write('%s\n' % key)
+
+    with open('keys2.txt', 'w') as f:
+        for key in keys2:
+            f.write('%s\n' % key)
+
     write_tfrecord(train, "train")
     write_tfrecord(validation, "valid")
     write_tfrecord(test, "test")
@@ -157,7 +177,7 @@ def write_tfrecord(topics, name):
     file_name = name + '_len_label_path.txt'
     f = open(file_name, 'w')
     for t in topics:
-        features, length, label, path = t.get_feature(longest_topic)
+        features, length, label, path, _ = t.get_feature(longest_topic)
         f.write("%d\t%d\t%s\n" % (length, label, path))
 
         example = tf.train.Example(features=tf.train.Features(feature={

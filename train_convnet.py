@@ -21,6 +21,7 @@ from __future__ import print_function
 import tensorflow as tf
 from convnet.resnet import get_resnet_func
 from data import dataset as dset
+from convnet import preprocessor
 
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import sparse_ops
@@ -407,7 +408,8 @@ def main(_):
     # TODO: preprocessing
     def random_crop(input, size):
         return tf.random_crop(input, [size, 5000])
-    preprocessing_fn = random_crop
+    # preprocessing_fn = random_crop
+    preprocessing_fn = preprocessor.get_preprocessing(True)
 
     ##############################################################
     # Create a dataset provider that loads data from the dataset #
@@ -427,7 +429,7 @@ def main(_):
 
       train_tweet_size = FLAGS.train_image_size or network_fn.default_image_size
 
-      tweet = preprocessing_fn(tweet, train_tweet_size)
+      tweet = preprocessing_fn(tweet, shape, train_tweet_size)
 
       tweets, labels = tf.train.batch(
           [tweet, label],

@@ -261,16 +261,42 @@ def resnet(inputs,
            output_stride=None,
            reuse=None,
            scope='resnet'):
-    blocks = [
-        resnet_v2_block('block1', base_depth=128, num_units=3, stride=2),
-        resnet_v2_block('block2', base_depth=256, num_units=4, stride=2),
-        resnet_v2_block('block3', base_depth=512, num_units=6, stride=1),
-    ]
+    blocks = {
+        '50': [
+            resnet_v2_block('block1', base_depth=64, num_units=3, stride=2),
+            resnet_v2_block('block2', base_depth=128, num_units=4, stride=2),
+            resnet_v2_block('block3', base_depth=256, num_units=6, stride=2),
+            resnet_v2_block('block4', base_depth=512, num_units=3, stride=1),
+        ],
+        '101': [
+            resnet_v2_block('block1', base_depth=64, num_units=3, stride=2),
+            resnet_v2_block('block2', base_depth=128, num_units=4, stride=2),
+            resnet_v2_block('block3', base_depth=256, num_units=23, stride=2),
+            resnet_v2_block('block4', base_depth=512, num_units=3, stride=1),
+        ],
+        '152': [
+            resnet_v2_block('block1', base_depth=64, num_units=3, stride=2),
+            resnet_v2_block('block2', base_depth=128, num_units=8, stride=2),
+            resnet_v2_block('block3', base_depth=256, num_units=36, stride=2),
+            resnet_v2_block('block4', base_depth=512, num_units=3, stride=1),
+        ],
+        '200': [
+            resnet_v2_block('block1', base_depth=64, num_units=3, stride=2),
+            resnet_v2_block('block2', base_depth=128, num_units=24, stride=2),
+            resnet_v2_block('block3', base_depth=256, num_units=36, stride=2),
+            resnet_v2_block('block4', base_depth=512, num_units=3, stride=1),
+        ]
+    }
+    # blocks = [
+    #     resnet_v2_block('block1', base_depth=128, num_units=3, stride=2),
+    #     resnet_v2_block('block2', base_depth=256, num_units=4, stride=2),
+    #     resnet_v2_block('block3', base_depth=512, num_units=6, stride=1),
+    # ]
 
     inputs = tf.to_float(inputs)
     return resnet_v2(
         inputs,
-        blocks,
+        blocks['152'],
         num_classes,
         is_training,
         global_pool,
@@ -278,7 +304,7 @@ def resnet(inputs,
         include_root_block=True,
         reuse=reuse,
         scope=scope)
-resnet.default_image_size = 8
+resnet.default_image_size = 96
 
 
 def get_resnet_func(num_classes, weight_decay=0.0, is_training=False):

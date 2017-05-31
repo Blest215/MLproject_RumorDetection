@@ -64,18 +64,20 @@ def get_words(text):
 lock = Lock()
 
 class Topic:
-    tf_idfs = defaultdict(float)
+    tf_idfs = {}
     def __init__(self, file_path, label):
         # parsing data
         self.file_path = file_path
         self.label = label
         self.term_counter = Counter()
-        self.doc_counter = Counter()
 
         def line2textblob(line):
             """Convert line(tweet) to TextBlob"""
             json_obj = json.loads(line)
             text = json_obj['text']
+
+            url_pattern = re.compile('(https?:\/\/)([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?')
+            text = url_pattern.sub(' ', text)
 
             created_at = datetime.strptime(json_obj['created_at'], "%a %b %d %H:%M:%S +0000 %Y")
             textblob = tb(text)
@@ -104,14 +106,12 @@ class Topic:
         topic_file.close()
         self.tweets = sorted(self.tweets, key=lambda x: x[0])
 
-        for term in self.term_counter:
-            self.doc_counter.update({term: 1})
-
     # output : array of feature
     def get_feature(self):
         ix0 = []
         ix1 = []
         values = []
+
         for l, tweet in enumerate(self.tweets):
             word_counts = tweet[1]
             for word, count in word_counts.items():
@@ -134,6 +134,7 @@ def filepath2topic(filepath):
         sys.stdout.flush()
     return Topic(filepath, int('nonrumor' not in filepath))
 
+
 def read_data_sets():
     """read data from files in directory"""
     data_dir = FLAGS.dataset_directory
@@ -152,17 +153,13 @@ def read_data_sets():
         accum.update(counter)
         return accum
 
-    merged_term_counters = reduce(lambda a, b: merge_counters(a, b.term_counter), topics, Counter())
-    merged_doc_counters = reduce(lambda a, b: merge_counters(a, b.doc_counter), topics, Counter())
-    for w, t in merged_term_counters.items():
-        df = merged_doc_counters[w]
-        Topic.tf_idfs[w] = float(t) / float(df)
+    merged = reduce(lambda a, b: merge_counters(a, b.term_counter), topics, Counter())
 
     # sort word_counter and extract top FLAGS.K words
-    Topic.tf_idfs = sorted(Topic.tf_idfs.items(), key=operator.itemgetter(1), reverse=True)[:FLAGS.num_words]
+    merged = merged.most_common(FLAGS.num_words)
     f = open(os.path.join(FLAGS.output_directory, 'most_common.txt'), 'w')
     dictionary = defaultdict(int)
-    for idx, word in enumerate(Topic.tf_idfs):
+    for idx, word in enumerate(merged):
         f.writelines('{}\n'.format(str(word)))
         dictionary[word[0]] = idx
     Topic.tf_idfs = dictionary

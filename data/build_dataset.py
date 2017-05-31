@@ -101,6 +101,7 @@ class Topic:
 
         topic_file = open(file_path)
         self.tweets = map(line2textblob, topic_file)
+        topic_file.close()
         self.tweets = sorted(self.tweets, key=lambda x: x[0])
 
         for term in self.term_counter:

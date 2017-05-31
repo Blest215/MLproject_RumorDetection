@@ -145,7 +145,9 @@ def main(_):
 
     # Define the metrics:
     names_to_values, names_to_updates = slim.metrics.aggregate_metric_map({
-        'Accuracy': slim.metrics.streaming_accuracy(predictions, labels)
+        'Accuracy': slim.metrics.streaming_accuracy(predictions, labels),
+        'Precision': slim.metrics.streaming_precision(predictions, labels),
+        'Recall': slim.metrics.streaming_recall(predictions, labels)
     })
 
     # Print the summaries to screen.
